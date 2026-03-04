@@ -125,6 +125,11 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private bool MatchesFilter(BenchmarkResult result)
         {
+            if (ShowMeasuredOnly && result.TotalTime <= 0)
+            {
+                return false;
+            }
+
             // Category Match
             bool categoryMatch = SelectedCategory == "All" || result.Category == SelectedCategory;
             if (!categoryMatch) return false;
@@ -177,6 +182,14 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         [ObservableProperty]
         private bool _useDeepScan = false;
+
+        [ObservableProperty]
+        private bool _showMeasuredOnly = false;
+
+        partial void OnShowMeasuredOnlyChanged(bool value)
+        {
+            _ = ApplyFilterAsync();
+        }
 
         [ObservableProperty]
         private string _realLoadTime = "N/A"; // Display string for Real Shell Benchmark

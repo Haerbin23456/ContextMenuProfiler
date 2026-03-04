@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ContextMenuProfiler.UI.Core.Services;
 
@@ -35,6 +36,11 @@ namespace ContextMenuProfiler.UI.Core.Services
         private const string PipeName = "ContextMenuProfilerHook";
         private const string DllName = "ContextMenuProfiler.Hook.dll";
         private const string InjectorName = "ContextMenuProfiler.Injector.exe";
+        private const int StatusFailureThreshold = 3;
+        private static readonly TimeSpan ActiveGraceWindow = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan DisconnectGraceWindow = TimeSpan.FromMinutes(3);
+        private int _consecutiveStatusFailures;
+        private DateTime _lastKnownActiveAtUtc = DateTime.MinValue;
 
         private HookService() 
         {
@@ -80,7 +86,18 @@ namespace ContextMenuProfiler.UI.Core.Services
             bool isPipeActive = await CheckPipeAsync();
             if (isPipeActive)
             {
+                _consecutiveStatusFailures = 0;
+                _lastKnownActiveAtUtc = DateTime.UtcNow;
                 CurrentStatus = HookStatus.Active;
+                return HookStatus.Active;
+            }
+
+            _consecutiveStatusFailures++;
+
+            if (CurrentStatus == HookStatus.Active &&
+                _consecutiveStatusFailures < StatusFailureThreshold &&
+                (DateTime.UtcNow - _lastKnownActiveAtUtc) <= ActiveGraceWindow)
+            {
                 return HookStatus.Active;
             }
 
@@ -89,44 +106,87 @@ namespace ContextMenuProfiler.UI.Core.Services
             bool isInjected = await Task.Run(() => IsDllInjected());
             
             var status = isInjected ? HookStatus.Injected : HookStatus.Disconnected;
+
+            // Some systems intermittently fail module enumeration or pipe probing after heavy scans.
+            // If we were recently active, prefer "Injected" instead of flapping to "Disconnected".
+            if (!isInjected &&
+                CurrentStatus != HookStatus.Disconnected &&
+                _lastKnownActiveAtUtc != DateTime.MinValue &&
+                (DateTime.UtcNow - _lastKnownActiveAtUtc) <= DisconnectGraceWindow)
+            {
+                status = HookStatus.Injected;
+            }
+
+            if (status != HookStatus.Disconnected)
+            {
+                _consecutiveStatusFailures = 0;
+            }
+            else if (CurrentStatus != HookStatus.Disconnected && _consecutiveStatusFailures < StatusFailureThreshold)
+            {
+                return CurrentStatus;
+            }
+
             CurrentStatus = status;
             return status;
         }
-
-        private Process? _cachedExplorer;
 
         private bool IsDllInjected()
         {
             try
             {
-                // Cache explorer process to avoid repeated lookups
-                if (_cachedExplorer == null || _cachedExplorer.HasExited)
+                // Multiple explorer.exe instances may exist.
+                // Treat injected as true if any explorer process has the module loaded.
+                foreach (var proc in Process.GetProcessesByName("explorer"))
                 {
-                    _cachedExplorer = Process.GetProcessesByName("explorer").FirstOrDefault();
+                    try
+                    {
+                        if (proc.HasExited) continue;
+                        if (proc.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals(DllName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore per-process access/read failures and continue checking others.
+                    }
+                    finally
+                    {
+                        proc.Dispose();
+                    }
                 }
-                
-                if (_cachedExplorer == null) return false;
-
-                // Process.Modules is expensive. We only call this when pipe check fails.
-                _cachedExplorer.Refresh(); // Ensure we have latest module list
-                return _cachedExplorer.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals(DllName, StringComparison.OrdinalIgnoreCase));
+                return false;
             }
             catch
             {
-                _cachedExplorer = null;
                 return false;
             }
         }
 
         private async Task<bool> CheckPipeAsync()
         {
+            bool hasLock = false;
             try
             {
+                // Reuse shared IPC lock to avoid status probe interfering with active benchmark requests.
+                hasLock = await HookIpcClient.IpcLock.WaitAsync(150);
+                if (!hasLock)
+                {
+                    return CurrentStatus == HookStatus.Active;
+                }
+
                 using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-                await client.ConnectAsync(700);
+                await client.ConnectAsync(1200);
                 return client.IsConnected;
             }
             catch { return false; }
+            finally
+            {
+                if (hasLock)
+                {
+                    HookIpcClient.IpcLock.Release();
+                }
+            }
         }
 
         public async Task<bool> InjectAsync()
@@ -143,7 +203,13 @@ namespace ContextMenuProfiler.UI.Core.Services
                 return false;
             }
 
-            return await RunCommandAsync(injectorPath, $"\"{dllPath}\"");
+            bool ok = await RunCommandAsync(injectorPath, $"\"{dllPath}\"");
+            if (ok)
+            {
+                _lastKnownActiveAtUtc = DateTime.UtcNow;
+                _consecutiveStatusFailures = 0;
+            }
+            return ok;
         }
 
         public async Task<bool> EjectAsync()
@@ -154,7 +220,14 @@ namespace ContextMenuProfiler.UI.Core.Services
             if (string.IsNullOrEmpty(injectorPath)) return false;
 
             // For ejection, we just need the filename, but the injector handles path to name conversion
-            return await RunCommandAsync(injectorPath, $"\"{dllPath}\" --eject");
+            bool ok = await RunCommandAsync(injectorPath, $"\"{dllPath}\" --eject");
+            if (ok)
+            {
+                _lastKnownActiveAtUtc = DateTime.MinValue;
+                _consecutiveStatusFailures = 0;
+                CurrentStatus = HookStatus.Disconnected;
+            }
+            return ok;
         }
 
         private string FindFile(string fileName)

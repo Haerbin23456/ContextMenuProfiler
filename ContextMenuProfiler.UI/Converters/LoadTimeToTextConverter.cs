@@ -34,6 +34,8 @@ namespace ContextMenuProfiler.UI.Converters
                    status.Contains("Load Error", StringComparison.OrdinalIgnoreCase) ||
                    status.Contains("Orphaned", StringComparison.OrdinalIgnoreCase) ||
                    status.Contains("Missing", StringComparison.OrdinalIgnoreCase) ||
+                     status.Contains("Not Measured", StringComparison.OrdinalIgnoreCase) ||
+                     status.Contains("Unsupported", StringComparison.OrdinalIgnoreCase) ||
                    status.Contains("No Menu", StringComparison.OrdinalIgnoreCase);
         }
 

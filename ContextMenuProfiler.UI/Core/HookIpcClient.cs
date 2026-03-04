@@ -37,113 +37,161 @@ namespace ContextMenuProfiler.UI.Core
     public static class HookIpcClient
     {
         private const string PipeName = "ContextMenuProfilerHook";
-        private const int ConnectTimeoutMs = 1200;
-        private const int RoundTripTimeoutMs = 2000;
-        private static readonly SemaphoreSlim _lock = new SemaphoreSlim(3, 3);
+        private const int LockAcquireTimeoutMs = 5000;
+        private const int ConnectTimeoutMs = 500;
+        private const int RoundTripTimeoutMs = 3500;
+        internal static readonly SemaphoreSlim IpcLock = new SemaphoreSlim(1, 1);
 
         public static async Task<HookCallResult> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null)
         {
             var result = new HookCallResult();
             var swTotal = Stopwatch.StartNew();
-
-            // Default bait path if none provided
-            string path = contextPath ?? Path.Combine(Path.GetTempPath(), "ContextMenuProfiler_probe.txt");
-            if (!File.Exists(path) && !Directory.Exists(path))
-            {
-                try { File.WriteAllText(path, "probe"); } catch {}
-            }
-
-            var swLock = Stopwatch.StartNew();
-            await _lock.WaitAsync();
-            swLock.Stop();
-            result.lock_wait_ms = Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
             try
             {
-                using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+                // Default bait path if none provided
+                string path = contextPath ?? Path.Combine(Path.GetTempPath(), "ContextMenuProfiler_probe.txt");
+                if (!File.Exists(path) && !Directory.Exists(path))
                 {
-                    var swConnect = Stopwatch.StartNew();
-                    bool connected = false;
-                    for (int attempt = 0; attempt < 2 && !connected; attempt++)
-                    {
-                        try
-                        {
-                            await client.ConnectAsync(ConnectTimeoutMs);
-                            connected = true;
-                        }
-                        catch when (attempt == 0)
-                        {
-                            await Task.Delay(80);
-                        }
-                    }
-                    if (!connected)
-                    {
-                        swConnect.Stop();
-                        result.connect_ms = Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
-                        Debug.WriteLine("[IPC DIAG] Connection Failed after retry.");
-                        return result;
-                    }
-                    swConnect.Stop();
-                    result.connect_ms = Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+                    try { File.WriteAllText(path, "probe"); } catch {}
+                }
 
-                    var swRoundTrip = Stopwatch.StartNew();
-                    using var roundTripCts = new CancellationTokenSource(RoundTripTimeoutMs);
-                    // Format: "CLSID|Path[|DllHint]"
-                    string requestStr = string.IsNullOrEmpty(dllHint) ? $"{clsid}|{path}" : $"{clsid}|{path}|{dllHint}";
-                    byte[] request = Encoding.UTF8.GetBytes(requestStr);
-                    await client.WriteAsync(request, 0, request.Length, roundTripCts.Token);
-                    await client.FlushAsync(roundTripCts.Token);
-
-                    byte[] responseBuf = new byte[65536];
-                    int read = await client.ReadAsync(responseBuf, 0, responseBuf.Length, roundTripCts.Token);
-                    
-                    if (read <= 0)
-                    {
-                        swRoundTrip.Stop();
-                        result.roundtrip_ms = Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                        return result;
-                    }
-
-                    string response = Encoding.UTF8.GetString(responseBuf, 0, read).TrimEnd('\0');
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    bool hasLock = false;
                     try
                     {
-                        // 寻找第一个 { 和最后一个 } 确保 JSON 完整
-                        int start = response.IndexOf('{');
-                        int end = response.LastIndexOf('}');
-                        if (start != -1 && end != -1 && end > start)
+                        var swLock = Stopwatch.StartNew();
+                        hasLock = await IpcLock.WaitAsync(LockAcquireTimeoutMs);
+                        swLock.Stop();
+                        result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
+                        if (!hasLock)
                         {
-                            string json = response.Substring(start, end - start + 1);
-                            result.data = JsonSerializer.Deserialize<HookResponse>(json);
-                            swRoundTrip.Stop();
-                            result.roundtrip_ms = Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                            if (attempt == 0)
+                            {
+                                await Task.Delay(150);
+                                continue;
+                            }
                             return result;
                         }
-                        swRoundTrip.Stop();
-                        result.roundtrip_ms = Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+
+                        using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+                        {
+                            var swConnect = Stopwatch.StartNew();
+                            try 
+                            {
+                                await client.ConnectAsync(ConnectTimeoutMs);
+                            }
+                            catch (Exception ex)
+                            {
+                                swConnect.Stop();
+                                result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+                                Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
+                                if (attempt == 0)
+                                {
+                                    await Task.Delay(120);
+                                    continue;
+                                }
+                                return result;
+                            }
+                            swConnect.Stop();
+                            result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+
+                            var swRoundTrip = Stopwatch.StartNew();
+                            // Format: "CLSID|Path[|DllHint]"
+                            string requestStr = string.IsNullOrEmpty(dllHint) ? $"{clsid}|{path}" : $"{clsid}|{path}|{dllHint}";
+                            byte[] request = Encoding.UTF8.GetBytes(requestStr);
+                            await client.WriteAsync(request, 0, request.Length);
+
+                            byte[] responseBuf = new byte[65536];
+                            int read;
+                            try
+                            {
+                                read = await client.ReadAsync(responseBuf, 0, responseBuf.Length).WaitAsync(TimeSpan.FromMilliseconds(RoundTripTimeoutMs));
+                            }
+                            catch (TimeoutException)
+                            {
+                                swRoundTrip.Stop();
+                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                if (attempt == 0)
+                                {
+                                    await Task.Delay(120);
+                                    continue;
+                                }
+                                return result;
+                            }
+                            
+                            if (read <= 0)
+                            {
+                                swRoundTrip.Stop();
+                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                if (attempt == 0)
+                                {
+                                    await Task.Delay(120);
+                                    continue;
+                                }
+                                return result;
+                            }
+
+                            string response = Encoding.UTF8.GetString(responseBuf, 0, read).TrimEnd('\0');
+                            try
+                            {
+                                // 寻找第一个 { 和最后一个 } 确保 JSON 完整
+                                int start = response.IndexOf('{');
+                                int end = response.LastIndexOf('}');
+                                if (start != -1 && end != -1 && end > start)
+                                {
+                                    string json = response.Substring(start, end - start + 1);
+                                    result.data = JsonSerializer.Deserialize<HookResponse>(json);
+                                    swRoundTrip.Stop();
+                                    result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                    return result;
+                                }
+                                swRoundTrip.Stop();
+                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                if (attempt == 0)
+                                {
+                                    await Task.Delay(120);
+                                    continue;
+                                }
+                                return result;
+                            }
+                            catch (JsonException)
+                            {
+                                swRoundTrip.Stop();
+                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                if (attempt == 0)
+                                {
+                                    await Task.Delay(120);
+                                    continue;
+                                }
+                                return result;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
+                        if (attempt == 0)
+                        {
+                            await Task.Delay(120);
+                            continue;
+                        }
                         return result;
                     }
-                    catch (JsonException)
+                    finally
                     {
-                        swRoundTrip.Stop();
-                        result.roundtrip_ms = Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                        return result;
+                        if (hasLock)
+                        {
+                            IpcLock.Release();
+                        }
                     }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                Debug.WriteLine("[IPC DIAG] Roundtrip timeout.");
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
                 return result;
             }
             finally
             {
                 swTotal.Stop();
                 result.total_ms = Math.Max(0, (long)swTotal.Elapsed.TotalMilliseconds);
-                _lock.Release();
             }
         }
 

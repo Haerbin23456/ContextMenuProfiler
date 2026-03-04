@@ -56,6 +56,14 @@ namespace ContextMenuProfiler.UI.Core
 
     public class BenchmarkService
     {
+        private static readonly string[] KnownUnstableHandlerTokens =
+        {
+            "PintoStartScreen",
+            "NvcplDesktopContext",
+            "NvAppDesktopContext",
+            "NVIDIA CPL Context Menu Extension"
+        };
+
         public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode = ScanMode.Targeted)
         {
             // Use Task.Run to avoid deadlocks on UI thread when waiting for async tasks
@@ -126,13 +134,14 @@ namespace ContextMenuProfiler.UI.Core
                     {
                         Name = name,
                         Type = "Static",
-                        Status = "OK",
+                        Status = "Static (Not Measured)",
                         BinaryPath = ExtractExecutablePath(command),
                         RegistryEntries = paths.Select(p => new RegistryHandlerInfo { 
                             Path = p, 
                             Location = $"Registry (Shell) - {p.Split('\\')[0]}" 
                         }).ToList(),
                         InterfaceType = "Static Verb",
+                        DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
                         TotalTime = 0,
                         Category = "Static"
                     };
@@ -176,6 +185,18 @@ namespace ContextMenuProfiler.UI.Core
         {
             if (!result.Clsid.HasValue) return;
 
+            if (IsKnownUnstableHandler(result))
+            {
+                result.Status = "Skipped (Known Unstable)";
+                result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
+                result.InterfaceType = "Skipped";
+                result.CreateTime = 0;
+                result.InitTime = 0;
+                result.QueryTime = 0;
+                result.TotalTime = 0;
+                return;
+            }
+
             // Check for Orphaned / Missing DLL
             if (!string.IsNullOrEmpty(result.BinaryPath) && !File.Exists(result.BinaryPath))
             {
@@ -195,7 +216,11 @@ namespace ContextMenuProfiler.UI.Core
                 result.InterfaceType = hookData.@interface;
                 if (!string.IsNullOrEmpty(hookData.names))
                 {
-                    result.Name = hookData.names.Replace("|", ", ");
+                    // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
+                    if (!string.Equals(result.Type, "UWP", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result.Name = hookData.names.Replace("|", ", ");
+                    }
                     if (result.Status == "Unknown") result.Status = "Verified via Hook";
                 }
                 else if (result.Status == "Unknown" || result.Status == "OK")
@@ -219,25 +244,17 @@ namespace ContextMenuProfiler.UI.Core
             }
             else if (hookData != null && !hookData.success)
             {
-                if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
-                {
-                    result.Status = "IPC Timeout";
-                    result.DetailedStatus = $"Hook service timed out while probing this extension. Error: {hookData.error}";
-                }
-                else
-                {
-                    result.Status = "Load Error";
-                    result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
-                }
+                result.Status = "Load Error";
+                result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
             }
             else if (hookData == null)
             {
                 if (result.Status != "Load Error" && result.Status != "Orphaned / Missing DLL")
                 {
-                    if (hookCall.roundtrip_ms >= 1900)
+                    if (string.Equals(result.Type, "UWP", StringComparison.OrdinalIgnoreCase))
                     {
-                        result.Status = "IPC Timeout";
-                        result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";
+                        result.Status = "Unsupported (UWP)";
+                        result.DetailedStatus = "This UWP/packaged extension could not be benchmarked via current Hook path on this system.";
                     }
                     else
                     {
@@ -246,6 +263,37 @@ namespace ContextMenuProfiler.UI.Core
                     }
                 }
             }
+        }
+
+        private static bool IsKnownUnstableHandler(BenchmarkResult result)
+        {
+            if (!string.IsNullOrWhiteSpace(result.Name) &&
+                KnownUnstableHandlerTokens.Any(token => result.Name.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.FriendlyName) &&
+                KnownUnstableHandlerTokens.Any(token => result.FriendlyName.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (result.RegistryEntries != null)
+            {
+                foreach (var entry in result.RegistryEntries)
+                {
+                    if ((!string.IsNullOrWhiteSpace(entry.Location) &&
+                         KnownUnstableHandlerTokens.Any(token => entry.Location.Contains(token, StringComparison.OrdinalIgnoreCase))) ||
+                        (!string.IsNullOrWhiteSpace(entry.Path) &&
+                         KnownUnstableHandlerTokens.Any(token => entry.Path.Contains(token, StringComparison.OrdinalIgnoreCase))))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private ClsidMetadata QueryClsidMetadata(Guid clsid, int depth = 0)

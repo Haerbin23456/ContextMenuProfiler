@@ -196,12 +196,19 @@
             <ui:TextBox PlaceholderText="{Binding [Dashboard.SearchExtensions], Source={x:Static services:LocalizationService.Instance}}" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                         Icon="{ui:SymbolIcon Symbol=Search24}" Margin="0,0,12,0"/>
 
-            <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedSortIndex}" MinWidth="200" VerticalAlignment="Center">
-                <ComboBoxItem Content="{Binding [Dashboard.Sort.LoadDesc], Source={x:Static services:LocalizationService.Instance}}"/>
-                <ComboBoxItem Content="{Binding [Dashboard.Sort.LoadAsc], Source={x:Static services:LocalizationService.Instance}}"/>
-                <ComboBoxItem Content="{Binding [Dashboard.Sort.NameAsc], Source={x:Static services:LocalizationService.Instance}}"/>
-                <ComboBoxItem Content="{Binding [Dashboard.Sort.Latest], Source={x:Static services:LocalizationService.Instance}}"/>
-            </ComboBox>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:ToggleSwitch Margin="0,0,12,0"
+                                 IsChecked="{Binding ShowMeasuredOnly}"
+                                 Content="{Binding [Dashboard.FilterMeasuredOnly], Source={x:Static services:LocalizationService.Instance}}"
+                                 ToolTip="{Binding [Dashboard.FilterMeasuredOnlyTip], Source={x:Static services:LocalizationService.Instance}}"/>
+
+                <ComboBox SelectedIndex="{Binding SelectedSortIndex}" MinWidth="200" VerticalAlignment="Center">
+                    <ComboBoxItem Content="{Binding [Dashboard.Sort.LoadDesc], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [Dashboard.Sort.LoadAsc], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [Dashboard.Sort.NameAsc], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [Dashboard.Sort.Latest], Source={x:Static services:LocalizationService.Instance}}"/>
+                </ComboBox>
+            </StackPanel>
         </Grid>
 
         <!-- Category Selection (ListBox styled as Pivot/Segmented with adaptive layout) -->
