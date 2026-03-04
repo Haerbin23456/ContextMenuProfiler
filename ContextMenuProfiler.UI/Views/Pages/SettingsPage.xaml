@@ -5,14 +5,15 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:viewmodels="clr-namespace:ContextMenuProfiler.UI.ViewModels"
+      xmlns:services="clr-namespace:ContextMenuProfiler.UI.Core.Services"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
-      Title="Settings"
+      Title="{Binding [Settings.Title], Source={x:Static services:LocalizationService.Instance}}"
       d:DataContext="{d:DesignInstance viewmodels:SettingsViewModel}">
     
     <Grid Margin="66,24,66,24">
         <StackPanel>
-            <ui:TextBlock Text="System Tools" FontTypography="Subtitle" Margin="0,0,0,12"/>
+            <ui:TextBlock Text="{Binding [Settings.SystemTools], Source={x:Static services:LocalizationService.Instance}}" FontTypography="Subtitle" Margin="0,0,0,12"/>
             
             <ui:Card Padding="16">
                 <Grid>
@@ -25,8 +26,8 @@
                     <ui:SymbolIcon Grid.Column="0" Symbol="ArrowReset24" Margin="0,2,14,0" VerticalAlignment="Top"/>
 
                     <StackPanel Grid.Column="1" Margin="0,0,16,0">
-                        <TextBlock Text="Restart Explorer" FontWeight="SemiBold" FontSize="14"/>
-                        <TextBlock Text="Restarts Windows Explorer process. Useful when shell extensions are stuck or not loading."
+                        <TextBlock Text="{Binding [Settings.RestartExplorer], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                        <TextBlock Text="{Binding [Settings.RestartExplorerDesc], Source={x:Static services:LocalizationService.Instance}}"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    FontSize="12"
@@ -36,9 +37,38 @@
                     <ui:Button Grid.Column="2"
                                VerticalAlignment="Top"
                                MinWidth="96"
-                               Content="Restart"
+                               Content="{Binding [Settings.Restart], Source={x:Static services:LocalizationService.Instance}}"
                                Icon="{ui:SymbolIcon Symbol=ArrowReset24}"
                                Command="{Binding RestartExplorerCommand}"/>
+                </Grid>
+            </ui:Card>
+
+            <ui:TextBlock Text="{Binding [Settings.Language], Source={x:Static services:LocalizationService.Instance}}" FontTypography="Subtitle" Margin="0,20,0,12"/>
+
+            <ui:Card Padding="16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="220"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ui:SymbolIcon Grid.Column="0" Symbol="Globe24" Margin="0,2,14,0" VerticalAlignment="Top"/>
+
+                    <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                        <TextBlock Text="{Binding [Settings.Language], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" FontSize="14"/>
+                        <TextBlock Text="{Binding [Settings.LanguageDesc], Source={x:Static services:LocalizationService.Instance}}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="12"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <ComboBox Grid.Column="2"
+                              VerticalAlignment="Top"
+                              ItemsSource="{Binding LanguageOptions}"
+                              SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                              DisplayMemberPath="DisplayName"/>
                 </Grid>
             </ui:Card>
         </StackPanel>

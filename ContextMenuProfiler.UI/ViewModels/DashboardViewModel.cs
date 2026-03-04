@@ -144,7 +144,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _statusText = "Ready to scan";
+        private string _statusText = LocalizationService.Instance["Dashboard.Status.Ready"];
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
@@ -193,10 +193,10 @@ namespace ContextMenuProfiler.UI.ViewModels
             {
                 return CurrentHookStatus switch
                 {
-                    HookStatus.Active => "Hook Service Active",
-                    HookStatus.Injected => "DLL Injected, Waiting for Pipe...",
-                    HookStatus.Disconnected => "Hook Disconnected (Injection Required)",
-                    _ => "Unknown Status"
+                    HookStatus.Active => LocalizationService.Instance["Hook.Active"],
+                    HookStatus.Injected => LocalizationService.Instance["Hook.InjectedIdle"],
+                    HookStatus.Disconnected => LocalizationService.Instance["Hook.NotInjected"],
+                    _ => LocalizationService.Instance["Dashboard.Status.Unknown"]
                 };
             }
         }
@@ -210,15 +210,19 @@ namespace ContextMenuProfiler.UI.ViewModels
             // Removed sync ScanResultsView setup
 
             // Initialize categories
-            Categories = new ObservableCollection<CategoryItem>
+            ApplyLocalizedCategoryNames();
+            LocalizationService.Instance.PropertyChanged += (_, e) =>
             {
-                new CategoryItem { Name = "All", Tag = "All", Icon = SymbolRegular.TableMultiple20, IsActive = true },
-                new CategoryItem { Name = "Files", Tag = "File", Icon = SymbolRegular.Document20 },
-                new CategoryItem { Name = "Folders", Tag = "Folder", Icon = SymbolRegular.Folder20 },
-                new CategoryItem { Name = "Background", Tag = "Background", Icon = SymbolRegular.Image20 },
-                new CategoryItem { Name = "Drives", Tag = "Drive", Icon = SymbolRegular.HardDrive20 },
-                new CategoryItem { Name = "UWP/Modern", Tag = "UWP", Icon = SymbolRegular.Box20 },
-                new CategoryItem { Name = "Static Verbs", Tag = "Static", Icon = SymbolRegular.PuzzlePiece20 }
+                if (e.PropertyName == "Item[]")
+                {
+                    ApplyLocalizedCategoryNames();
+                    OnPropertyChanged(nameof(CurrentHookStatus));
+                    OnPropertyChanged(nameof(HookStatusMessage));
+                    if (!IsBusy)
+                    {
+                        StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
+                    }
+                }
             };
 
             // Observe Hook status changes to update command availability
@@ -307,7 +311,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         private async Task ScanSystem()
         {
             _lastScanMode = "System";
-            StatusText = "Scanning system...";
+            StatusText = LocalizationService.Instance["Dashboard.Status.ScanningSystem"];
             IsBusy = true;
             
             App.Current.Dispatcher.Invoke(() =>
@@ -358,14 +362,14 @@ namespace ContextMenuProfiler.UI.ViewModels
                 TryCompleteUiDrain();
                 await uiDrainTcs.Task;
 
-                StatusText = $"Scan complete. Found {Results.Count} extensions.";
-                NotificationService.Instance.ShowSuccess("Scan Complete", $"Found {Results.Count} extensions.");
+                StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], Results.Count);
+                NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], Results.Count));
             }
             catch (Exception ex)
             {
                 LogService.Instance.Error("Scan System Failed", ex);
-                StatusText = "Scan failed.";
-                NotificationService.Instance.ShowError("Scan Failed", ex.Message);
+                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
             }
             finally
             {
@@ -403,8 +407,8 @@ namespace ContextMenuProfiler.UI.ViewModels
         private async Task PickAndScanFile()
         {
             var dialog = new Microsoft.Win32.OpenFileDialog();
-            dialog.Title = "Select a file to analyze context menu";
-            dialog.Filter = "All files (*.*)|*.*";
+            dialog.Title = LocalizationService.Instance["Dashboard.Dialog.SelectFileTitle"];
+            dialog.Filter = LocalizationService.Instance["Dashboard.Dialog.AllFilesFilter"];
             
             if (dialog.ShowDialog() == true)
             {
@@ -419,12 +423,12 @@ namespace ContextMenuProfiler.UI.ViewModels
 
             _lastScanMode = "File";
             _lastScanPath = filePath;
-            StatusText = $"Scanning: {filePath}";
+            StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath);
             IsBusy = true;
             _scanOrderCounter = 0;
             Results.Clear();
             DisplayResults.Clear(); // Clear display
-            RealLoadTime = "Measuring...";
+            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
 
             try
             {
@@ -456,8 +460,8 @@ namespace ContextMenuProfiler.UI.ViewModels
                         InsertSorted(res);
                     }
                     UpdateStats();
-                    StatusText = $"Scan complete. Found {results.Count} extensions.";
-                    NotificationService.Instance.ShowSuccess("Scan Complete", $"Found {results.Count} extensions for {System.IO.Path.GetFileName(filePath)}.");
+                    StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], results.Count);
+                    NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"], results.Count, System.IO.Path.GetFileName(filePath)));
                 }
 
                 // Run Real-World Benchmark (Parallel but after discovery to avoid COM conflicts if any)
@@ -465,10 +469,10 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
             catch (Exception ex)
             {
-                StatusText = "Scan failed.";
+                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
                 LogService.Instance.Error("File Scan Failed", ex);
-                NotificationService.Instance.ShowError("Scan Failed", ex.Message);
-                RealLoadTime = "Error";
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
+                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
             }
             finally
             {
@@ -487,12 +491,30 @@ namespace ContextMenuProfiler.UI.ViewModels
                 }
                 else
                 {
-                    RealLoadTime = "Failed";
+                    RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Failed"];
                 }
             }
             catch
             {
-                RealLoadTime = "Error";
+                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
+            }
+        }
+
+        private void ApplyLocalizedCategoryNames()
+        {
+            Categories = new ObservableCollection<CategoryItem>
+            {
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = "All", Icon = SymbolRegular.TableMultiple20, IsActive = true },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = "File", Icon = SymbolRegular.Document20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = "Folder", Icon = SymbolRegular.Folder20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = "Background", Icon = SymbolRegular.Image20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = "Drive", Icon = SymbolRegular.HardDrive20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = "UWP", Icon = SymbolRegular.Box20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = "Static", Icon = SymbolRegular.PuzzlePiece20 }
+            };
+            if (SelectedCategoryIndex < 0 || SelectedCategoryIndex >= Categories.Count)
+            {
+                SelectedCategoryIndex = 0;
             }
         }
         

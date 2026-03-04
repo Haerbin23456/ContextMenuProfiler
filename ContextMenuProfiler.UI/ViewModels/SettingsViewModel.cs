@@ -1,17 +1,44 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ContextMenuProfiler.UI.Core.Services;
 using System.Diagnostics;
 using System.Windows;
 using System;
+using System.Collections.ObjectModel;
 
 namespace ContextMenuProfiler.UI.ViewModels
 {
     public partial class SettingsViewModel : ObservableObject
     {
+        private bool _isInitializing;
+
+        [ObservableProperty]
+        private ObservableCollection<LanguageOption> _languageOptions = new();
+
+        [ObservableProperty]
+        private LanguageOption? _selectedLanguage;
+
+        public SettingsViewModel()
+        {
+            _isInitializing = true;
+            LanguageOptions = new ObservableCollection<LanguageOption>(LocalizationService.Instance.AvailableLanguages);
+            string savedCode = UserPreferencesService.Load().LanguageCode;
+            SelectedLanguage = LanguageOptions.FirstOrDefault(l => l.Code.Equals(savedCode, StringComparison.OrdinalIgnoreCase))
+                               ?? LanguageOptions.FirstOrDefault(l => l.Code == "auto");
+            _isInitializing = false;
+        }
+
+        partial void OnSelectedLanguageChanged(LanguageOption? value)
+        {
+            if (value == null) return;
+            if (_isInitializing) return;
+            LocalizationService.Instance.SetLanguage(value.Code);
+        }
+
         [RelayCommand]
         private void RestartExplorer()
         {
-            if (MessageBox.Show("Are you sure you want to restart Windows Explorer?\nThis will temporarily close all folder windows and the taskbar.", "Confirm Restart", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            if (MessageBox.Show(LocalizationService.Instance["Dialog.ConfirmRestart.Message"], LocalizationService.Instance["Dialog.ConfirmRestart.Title"], MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 try
                 {
@@ -22,7 +49,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to restart Explorer: {ex.Message}", "Error");
+                    MessageBox.Show(string.Format(LocalizationService.Instance["Dialog.Error.RestartExplorer"], ex.Message), LocalizationService.Instance["Dialog.Error.Title"]);
                 }
             }
         }
