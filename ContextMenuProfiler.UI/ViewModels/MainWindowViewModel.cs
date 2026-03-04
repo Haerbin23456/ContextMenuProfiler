@@ -14,21 +14,31 @@ namespace ContextMenuProfiler.UI.ViewModels
     public partial class MainWindowViewModel : ObservableObject
     {
         [ObservableProperty]
-        private string _applicationTitle = "Context Menu Profiler";
+        private string _applicationTitle = LocalizationService.Instance["App.Title"];
 
         [ObservableProperty]
         private HookStatus _currentHookStatus = HookStatus.Disconnected;
 
         [ObservableProperty]
-        private string _hookStatusMessage = "Hook: Disconnected";
+        private string _hookStatusMessage = LocalizationService.Instance["Hook.NotInjected"];
 
         [ObservableProperty]
-        private string _hookButtonText = "Inject Hook";
+        private string _hookButtonText = LocalizationService.Instance["Hook.Inject"];
 
         private readonly DispatcherTimer _statusTimer;
 
         public MainWindowViewModel()
         {
+            LocalizationService.Instance.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == "Item[]")
+                {
+                    ApplyLocalization();
+                    _ = UpdateHookStatus();
+                }
+            };
+
+            ApplyLocalization();
             _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _statusTimer.Tick += async (s, e) => await UpdateHookStatus();
             _statusTimer.Start();
@@ -43,18 +53,43 @@ namespace ContextMenuProfiler.UI.ViewModels
             switch (CurrentHookStatus)
             {
                 case HookStatus.Disconnected:
-                    HookStatusMessage = "Hook: Not Injected";
-                    HookButtonText = "Inject Hook";
+                    HookStatusMessage = LocalizationService.Instance["Hook.NotInjected"];
+                    HookButtonText = LocalizationService.Instance["Hook.Inject"];
                     break;
                 case HookStatus.Injected:
-                    HookStatusMessage = "Hook: Injected (Idle)";
-                    HookButtonText = "Eject Hook";
+                    HookStatusMessage = LocalizationService.Instance["Hook.InjectedIdle"];
+                    HookButtonText = LocalizationService.Instance["Hook.Eject"];
                     break;
                 case HookStatus.Active:
-                    HookStatusMessage = "Hook: Active";
-                    HookButtonText = "Eject Hook";
+                    HookStatusMessage = LocalizationService.Instance["Hook.Active"];
+                    HookButtonText = LocalizationService.Instance["Hook.Eject"];
                     break;
             }
+        }
+
+        private void ApplyLocalization()
+        {
+            ApplicationTitle = LocalizationService.Instance["App.Title"];
+            MenuItems = new ObservableCollection<object>
+            {
+                new NavigationViewItem
+                {
+                    Content = LocalizationService.Instance["Nav.Dashboard"],
+                    Icon = new SymbolIcon { Symbol = SymbolRegular.Home24 },
+                    TargetPageType = typeof(DashboardPage)
+                },
+                new NavigationViewItem
+                {
+                    Content = LocalizationService.Instance["Nav.Settings"],
+                    Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
+                    TargetPageType = typeof(SettingsPage)
+                }
+            };
+
+            TrayMenuItems = new ObservableCollection<System.Windows.Controls.MenuItem>
+            {
+                new System.Windows.Controls.MenuItem { Header = LocalizationService.Instance["Tray.Home"], Tag = "home" }
+            };
         }
 
         [RelayCommand]
@@ -72,21 +107,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private ObservableCollection<object> _menuItems = new()
-        {
-            new NavigationViewItem
-            {
-                Content = "Dashboard",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Home24 },
-                TargetPageType = typeof(DashboardPage)
-            },
-            new NavigationViewItem
-            {
-                Content = "Settings",
-                Icon = new SymbolIcon { Symbol = SymbolRegular.Settings24 },
-                TargetPageType = typeof(SettingsPage)
-            }
-        };
+        private ObservableCollection<object> _menuItems = new();
 
         [ObservableProperty]
         private ObservableCollection<object> _footerMenuItems = new()
@@ -94,9 +115,6 @@ namespace ContextMenuProfiler.UI.ViewModels
         };
         
         [ObservableProperty]
-        private ObservableCollection<System.Windows.Controls.MenuItem> _trayMenuItems = new()
-        {
-             new System.Windows.Controls.MenuItem { Header = "Home", Tag = "home" }
-        };
+        private ObservableCollection<System.Windows.Controls.MenuItem> _trayMenuItems = new();
     }
 }
