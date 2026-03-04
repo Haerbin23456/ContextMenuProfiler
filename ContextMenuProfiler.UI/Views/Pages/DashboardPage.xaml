@@ -189,12 +189,19 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <ui:TextBox PlaceholderText="Search extensions..." Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                         Icon="{ui:SymbolIcon Symbol=Search24}" Margin="0,0,12,0"/>
 
-            <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedSortIndex}" MinWidth="200" VerticalAlignment="Center">
+            <CheckBox Grid.Column="1"
+                      Content="Hide N/A"
+                      IsChecked="{Binding HideInvalidResults, Mode=TwoWay}"
+                      VerticalAlignment="Center"
+                      Margin="0,0,12,0"/>
+
+            <ComboBox Grid.Column="2" SelectedIndex="{Binding SelectedSortIndex}" MinWidth="200" VerticalAlignment="Center">
                 <ComboBoxItem Content="Load Time (High to Low)"/>
                 <ComboBoxItem Content="Load Time (Low to High)"/>
                 <ComboBoxItem Content="Name (A-Z)"/>
@@ -430,8 +437,28 @@
                                                 </StackPanel>
                                             </ToolTip>
                                         </Border.ToolTip>
-                                        <TextBlock Text="{Binding TotalTime, StringFormat='{}{0} ms'}" FontSize="11" FontWeight="SemiBold" 
-                                                   Foreground="{Binding TotalTime, Converter={StaticResource LoadTimeToBrushConverter}}"/>
+                                        <TextBlock FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{Binding TotalTime, Converter={StaticResource LoadTimeToBrushConverter}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding TotalTime, StringFormat='{}{0} ms'}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Registry Fallback">
+                                                            <Setter Property="Text" Value="N/A"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Type}" Value="Static">
+                                                            <Setter Property="Text" Value="N/A"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                            <Setter Property="Text" Value="N/A"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                            <Setter Property="Text" Value="N/A"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </Border>
 
                                     <!-- Toggle -->

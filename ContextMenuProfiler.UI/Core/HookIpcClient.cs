@@ -28,6 +28,8 @@ namespace ContextMenuProfiler.UI.Core
     public static class HookIpcClient
     {
         private const string PipeName = "ContextMenuProfilerHook";
+        private const int ConnectTimeoutMs = 500;
+        private const int RequestTimeoutMs = 2500;
         private static readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
 
         public static async Task<HookResponse?> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null)
@@ -39,14 +41,18 @@ namespace ContextMenuProfiler.UI.Core
                 try { File.WriteAllText(path, "probe"); } catch {}
             }
 
-            await _lock.WaitAsync();
+            bool lockTaken = false;
             try
             {
+                await _lock.WaitAsync();
+                lockTaken = true;
+
+                using var timeoutCts = new CancellationTokenSource(RequestTimeoutMs);
                 using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
                 {
                     try 
                     {
-                        await client.ConnectAsync(500);
+                        await client.ConnectAsync(ConnectTimeoutMs, timeoutCts.Token);
                     }
                     catch (Exception ex)
                     {
@@ -57,10 +63,11 @@ namespace ContextMenuProfiler.UI.Core
                     // Format: "CLSID|Path[|DllHint]"
                     string requestStr = string.IsNullOrEmpty(dllHint) ? $"{clsid}|{path}" : $"{clsid}|{path}|{dllHint}";
                     byte[] request = Encoding.UTF8.GetBytes(requestStr);
-                    await client.WriteAsync(request, 0, request.Length);
+                    await client.WriteAsync(request, 0, request.Length, timeoutCts.Token);
+                    await client.FlushAsync(timeoutCts.Token);
 
                     byte[] responseBuf = new byte[65536];
-                    int read = await client.ReadAsync(responseBuf, 0, responseBuf.Length);
+                    int read = await client.ReadAsync(responseBuf, 0, responseBuf.Length, timeoutCts.Token);
                     
                     if (read <= 0) return null;
 
@@ -83,6 +90,11 @@ namespace ContextMenuProfiler.UI.Core
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                Debug.WriteLine("[IPC DIAG] Request timed out.");
+                return null;
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
@@ -90,7 +102,7 @@ namespace ContextMenuProfiler.UI.Core
             }
             finally
             {
-                _lock.Release();
+                if (lockTaken) _lock.Release();
             }
         }
 

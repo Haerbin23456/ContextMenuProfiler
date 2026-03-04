@@ -54,8 +54,13 @@ namespace ContextMenuProfiler.UI.Core
             {
                 string[] rootKeys = Registry.ClassesRoot.GetSubKeyNames();
                 
-                // Use Parallel.ForEach for faster scanning
-                Parallel.ForEach(rootKeys, keyName =>
+                // Bound parallelism to avoid saturating CPU during deep scans.
+                var options = new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2)
+                };
+
+                Parallel.ForEach(rootKeys, options, keyName =>
                 {
                     if (keyName.StartsWith("."))
                     {

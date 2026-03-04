@@ -2,6 +2,7 @@
 #include <tlhelp32.h>
 #include <stdio.h>
 #include <iostream>
+#include <vector>
 
 // Enable Debug Privilege (Required for injecting into system processes)
 bool EnableDebugPrivilege()
@@ -35,35 +36,34 @@ bool EnableDebugPrivilege()
     return true;
 }
 
-// Helper to inject DLL into process by name
-bool InjectDll(const char* processName, const char* dllPath)
+static std::vector<DWORD> FindProcessIdsByName(const char* processName)
 {
-    DWORD processId = 0;
+    std::vector<DWORD> processIds;
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot != INVALID_HANDLE_VALUE)
+    if (hSnapshot == INVALID_HANDLE_VALUE)
     {
-        PROCESSENTRY32 pe;
-        pe.dwSize = sizeof(PROCESSENTRY32);
-        if (Process32First(hSnapshot, &pe))
+        return processIds;
+    }
+
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    if (Process32First(hSnapshot, &pe))
+    {
+        do
         {
-            do
+            if (_stricmp(pe.szExeFile, processName) == 0)
             {
-                if (_stricmp(pe.szExeFile, processName) == 0)
-                {
-                    processId = pe.th32ProcessID;
-                    break;
-                }
-            } while (Process32Next(hSnapshot, &pe));
-        }
-        CloseHandle(hSnapshot);
+                processIds.push_back(pe.th32ProcessID);
+            }
+        } while (Process32Next(hSnapshot, &pe));
     }
 
-    if (processId == 0)
-    {
-        std::cerr << "Process not found: " << processName << std::endl;
-        return false;
-    }
+    CloseHandle(hSnapshot);
+    return processIds;
+}
 
+static bool InjectDllToProcess(DWORD processId, const char* dllPath)
+{
     std::cout << "Target Process ID: " << processId << std::endl;
 
     HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
@@ -130,35 +130,30 @@ bool InjectDll(const char* processName, const char* dllPath)
     return exitCode != 0;
 }
 
-// Helper to eject DLL from process by name
-bool EjectDll(const char* processName, const char* dllName)
+// Helper to inject DLL into all matching processes by name
+bool InjectDll(const char* processName, const char* dllPath)
 {
-    DWORD processId = 0;
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot != INVALID_HANDLE_VALUE)
-    {
-        PROCESSENTRY32 pe;
-        pe.dwSize = sizeof(PROCESSENTRY32);
-        if (Process32First(hSnapshot, &pe))
-        {
-            do
-            {
-                if (_stricmp(pe.szExeFile, processName) == 0)
-                {
-                    processId = pe.th32ProcessID;
-                    break;
-                }
-            } while (Process32Next(hSnapshot, &pe));
-        }
-        CloseHandle(hSnapshot);
-    }
-
-    if (processId == 0)
+    std::vector<DWORD> processIds = FindProcessIdsByName(processName);
+    if (processIds.empty())
     {
         std::cerr << "Process not found: " << processName << std::endl;
         return false;
     }
 
+    bool anySuccess = false;
+    for (DWORD pid : processIds)
+    {
+        if (InjectDllToProcess(pid, dllPath))
+        {
+            anySuccess = true;
+        }
+    }
+
+    return anySuccess;
+}
+
+static bool EjectDllFromProcess(DWORD processId, const char* dllName)
+{
     HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
     if (!hProcess)
     {
@@ -209,6 +204,28 @@ bool EjectDll(const char* processName, const char* dllName)
     CloseHandle(hProcess);
 
     return true;
+}
+
+// Helper to eject DLL from all matching processes by name
+bool EjectDll(const char* processName, const char* dllName)
+{
+    std::vector<DWORD> processIds = FindProcessIdsByName(processName);
+    if (processIds.empty())
+    {
+        std::cerr << "Process not found: " << processName << std::endl;
+        return false;
+    }
+
+    bool anySuccess = false;
+    for (DWORD pid : processIds)
+    {
+        if (EjectDllFromProcess(pid, dllName))
+        {
+            anySuccess = true;
+        }
+    }
+
+    return anySuccess;
 }
 
 int main(int argc, char* argv[])

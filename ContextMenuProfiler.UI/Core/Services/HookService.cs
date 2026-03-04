@@ -93,27 +93,35 @@ namespace ContextMenuProfiler.UI.Core.Services
             return status;
         }
 
-        private Process? _cachedExplorer;
-
         private bool IsDllInjected()
         {
             try
             {
-                // Cache explorer process to avoid repeated lookups
-                if (_cachedExplorer == null || _cachedExplorer.HasExited)
+                // Multiple explorer.exe instances may exist.
+                // Treat injected as true if any explorer process has the module loaded.
+                foreach (var proc in Process.GetProcessesByName("explorer"))
                 {
-                    _cachedExplorer = Process.GetProcessesByName("explorer").FirstOrDefault();
+                    try
+                    {
+                        if (proc.HasExited) continue;
+                        if (proc.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals(DllName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore per-process access/read failures and continue checking others.
+                    }
+                    finally
+                    {
+                        proc.Dispose();
+                    }
                 }
-                
-                if (_cachedExplorer == null) return false;
-
-                // Process.Modules is expensive. We only call this when pipe check fails.
-                _cachedExplorer.Refresh(); // Ensure we have latest module list
-                return _cachedExplorer.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals(DllName, StringComparison.OrdinalIgnoreCase));
+                return false;
             }
             catch
             {
-                _cachedExplorer = null;
                 return false;
             }
         }

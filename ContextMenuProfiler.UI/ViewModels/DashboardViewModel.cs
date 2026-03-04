@@ -129,16 +129,36 @@ namespace ContextMenuProfiler.UI.ViewModels
             bool categoryMatch = SelectedCategory == "All" || result.Category == SelectedCategory;
             if (!categoryMatch) return false;
 
+            // Optional invalid-result filter (N/A, fallback, static)
+            if (HideInvalidResults && IsInvalidTimingResult(result)) return false;
+
             // Search Match
             if (string.IsNullOrWhiteSpace(SearchText)) return true;
             return result.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
                    (result.Path != null && result.Path.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
         }
 
+        private static bool IsInvalidTimingResult(BenchmarkResult result)
+        {
+            if (result.Type == "Static") return true;
+            if (string.Equals(result.Status, "Registry Fallback", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(result.Status, "Load Error", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(result.Status, "Orphaned / Missing DLL", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         [ObservableProperty]
         private int _selectedSortIndex = 0; // 0: Time Desc, 1: Time Asc, 2: Name
 
         partial void OnSelectedSortIndexChanged(int value)
+        {
+            _ = ApplyFilterAsync();
+        }
+
+        [ObservableProperty]
+        private bool _hideInvalidResults = false;
+
+        partial void OnHideInvalidResultsChanged(bool value)
         {
             _ = ApplyFilterAsync();
         }
@@ -308,27 +328,25 @@ namespace ContextMenuProfiler.UI.ViewModels
             _lastScanMode = "System";
             StatusText = "Scanning system...";
             IsBusy = true;
+            bool startedWithHook = HookService.Instance.CurrentStatus != HookStatus.Disconnected;
             
             App.Current.Dispatcher.Invoke(() =>
             {
                 Results.Clear();
                 DisplayResults.Clear();
+                ResetStats();
             });
             
             try
             {
-                var progressAction = new Action<BenchmarkResult>(async result =>
+                var progressAction = new Action<BenchmarkResult>(result =>
                 {
-                    // Use Background priority to ensure UI remains smooth during scan
-                    await App.Current.Dispatcher.InvokeAsync(() => 
-                    {
-                        InsertSorted(result);
-                        UpdateStats();
-                    }, System.Windows.Threading.DispatcherPriority.Background);
+                    InsertSorted(result);
+                    AccumulateStats(result);
                 });
 
                 var mode = UseDeepScan ? ScanMode.Full : ScanMode.Targeted;
-                await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction)));
+                await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction));
 
                 StatusText = $"Scan complete. Found {Results.Count} extensions.";
                 NotificationService.Instance.ShowSuccess("Scan Complete", $"Found {Results.Count} extensions.");
@@ -342,6 +360,34 @@ namespace ContextMenuProfiler.UI.ViewModels
             finally
             {
                 IsBusy = false;
+
+                // If hook was available at scan start but got lost during scan,
+                // try one quick recovery so subsequent scans don't immediately fall back.
+                if (startedWithHook)
+                {
+                    try
+                    {
+                        var endStatus = await HookService.Instance.GetStatusAsync();
+                        if (endStatus == HookStatus.Disconnected)
+                        {
+                            bool recovered = await HookService.Instance.InjectAsync();
+                            if (recovered)
+                            {
+                                await Task.Delay(300);
+                                endStatus = await HookService.Instance.GetStatusAsync();
+                            }
+
+                            if (endStatus != HookStatus.Active)
+                            {
+                                NotificationService.Instance.ShowWarning("Hook Disconnected", "Hook service disconnected during scan. Results may contain fallback data.");
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // No-op: scan result is already available.
+                    }
+                }
             }
         }
 
@@ -354,6 +400,33 @@ namespace ContextMenuProfiler.UI.ViewModels
             if (MatchesFilter(newItem))
             {
                 DisplayResults.InsertSorted(newItem, CurrentComparer);
+            }
+        }
+
+        private void ResetStats()
+        {
+            TotalExtensions = 0;
+            DisabledExtensions = 0;
+            ActiveExtensions = 0;
+            TotalLoadTime = 0;
+            ActiveLoadTime = 0;
+            DisabledLoadTime = 0;
+        }
+
+        private void AccumulateStats(BenchmarkResult item)
+        {
+            TotalExtensions += 1;
+            TotalLoadTime += item.TotalTime;
+
+            if (item.IsEnabled)
+            {
+                ActiveExtensions += 1;
+                ActiveLoadTime += item.TotalTime;
+            }
+            else
+            {
+                DisabledExtensions += 1;
+                DisabledLoadTime += item.TotalTime;
             }
         }
 
