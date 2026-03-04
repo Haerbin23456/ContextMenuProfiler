@@ -319,18 +319,44 @@ namespace ContextMenuProfiler.UI.ViewModels
             
             try
             {
-                var progressAction = new Action<BenchmarkResult>(async result =>
+                int pendingUiUpdates = 0;
+                bool producerCompleted = false;
+                var uiDrainTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                void TryCompleteUiDrain()
+                {
+                    if (producerCompleted && Volatile.Read(ref pendingUiUpdates) == 0)
+                    {
+                        uiDrainTcs.TrySetResult(true);
+                    }
+                }
+
+                var progressAction = new Action<BenchmarkResult>(result =>
                 {
                     // Use Background priority to ensure UI remains smooth during scan
-                    await App.Current.Dispatcher.InvokeAsync(() => 
+                    Interlocked.Increment(ref pendingUiUpdates);
+                    var dispatcherTask = App.Current.Dispatcher.InvokeAsync(() => 
                     {
                         InsertSorted(result);
                         UpdateStats();
-                    }, System.Windows.Threading.DispatcherPriority.Background);
+                    }, System.Windows.Threading.DispatcherPriority.Background).Task;
+
+                    _ = dispatcherTask.ContinueWith(t =>
+                    {
+                        Interlocked.Decrement(ref pendingUiUpdates);
+                        if (t.IsFaulted && t.Exception != null)
+                        {
+                            LogService.Instance.Error("Progress UI update failed", t.Exception);
+                        }
+                        TryCompleteUiDrain();
+                    }, TaskScheduler.Default);
                 });
 
                 var mode = UseDeepScan ? ScanMode.Full : ScanMode.Targeted;
                 await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction)));
+                producerCompleted = true;
+                TryCompleteUiDrain();
+                await uiDrainTcs.Task;
 
                 StatusText = $"Scan complete. Found {Results.Count} extensions.";
                 NotificationService.Instance.ShowSuccess("Scan Complete", $"Found {Results.Count} extensions.");
