@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build C++ Core (Hook & Injector)
+      shell: cmd
+      run: scripts\build_hook.bat
+
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Publish framework-dependent
+      run: dotnet publish ContextMenuProfiler.UI\ContextMenuProfiler.UI.csproj -c Release -r win-x64 --self-contained false -o publish\win-x64-fd
+
+    - name: Publish self-contained
+      run: dotnet publish ContextMenuProfiler.UI\ContextMenuProfiler.UI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish\win-x64-sc
+
+    - name: Prepare release bundles
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Path artifacts\ContextMenuProfiler-win-x64-framework-dependent -Force | Out-Null
+        New-Item -ItemType Directory -Path artifacts\ContextMenuProfiler-win-x64-self-contained -Force | Out-Null
+
+        Copy-Item -Path publish\win-x64-fd\* -Destination artifacts\ContextMenuProfiler-win-x64-framework-dependent -Recurse -Force
+        Copy-Item -Path publish\win-x64-sc\* -Destination artifacts\ContextMenuProfiler-win-x64-self-contained -Recurse -Force
+
+        Copy-Item -Path ContextMenuProfiler.Hook.dll -Destination artifacts\ContextMenuProfiler-win-x64-framework-dependent -Force
+        Copy-Item -Path ContextMenuProfiler.Injector.exe -Destination artifacts\ContextMenuProfiler-win-x64-framework-dependent -Force
+        Copy-Item -Path ContextMenuProfiler.Hook.dll -Destination artifacts\ContextMenuProfiler-win-x64-self-contained -Force
+        Copy-Item -Path ContextMenuProfiler.Injector.exe -Destination artifacts\ContextMenuProfiler-win-x64-self-contained -Force
+
+        Compress-Archive -Path artifacts\ContextMenuProfiler-win-x64-framework-dependent\* -DestinationPath artifacts\ContextMenuProfiler-win-x64-framework-dependent.zip -Force
+        Compress-Archive -Path artifacts\ContextMenuProfiler-win-x64-self-contained\* -DestinationPath artifacts\ContextMenuProfiler-win-x64-self-contained.zip -Force
+
+    - name: Verify release assets
+      shell: powershell
+      run: |
+        Get-ChildItem artifacts -File | Format-Table Name,Length
+        if (!(Test-Path "artifacts/ContextMenuProfiler-win-x64-framework-dependent.zip")) { throw "framework-dependent zip missing" }
+        if (!(Test-Path "artifacts/ContextMenuProfiler-win-x64-self-contained.zip")) { throw "self-contained zip missing" }
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        fail_on_unmatched_files: true
+        overwrite_files: true
+        files: |
+          artifacts/ContextMenuProfiler-win-x64-framework-dependent.zip
+          artifacts/ContextMenuProfiler-win-x64-self-contained.zip

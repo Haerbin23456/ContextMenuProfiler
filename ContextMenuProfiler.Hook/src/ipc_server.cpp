@@ -2,6 +2,17 @@
 #include "../include/MinHook.h"
 #include <stdio.h>
 
+static const LONG kMaxConcurrentPipeClients = 4;
+static volatile LONG g_ActivePipeClients = 0;
+static const DWORD kWorkerTimeoutMs = 1800;
+
+struct IpcWorkItem {
+    char request[2048];
+    char response[65536];
+    int maxLen;
+    volatile LONG releaseByWorker;
+};
+
 void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
     std::string reqStr = request;
     
@@ -85,6 +96,64 @@ void DoIpcWork(const char* request, char* response, int maxLen) {
     }
 }
 
+DWORD WINAPI DoIpcWorkThread(LPVOID param) {
+    IpcWorkItem* item = (IpcWorkItem*)param;
+    item->response[0] = '\0';
+    DoIpcWork(item->request, item->response, item->maxLen);
+    if (InterlockedCompareExchange(&item->releaseByWorker, 0, 0) == 1) {
+        delete item;
+    }
+    return 0;
+}
+
+DWORD WINAPI HandlePipeClientThread(LPVOID param) {
+    HANDLE hPipe = (HANDLE)param;
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+
+    char req[2048];
+    DWORD read = 0;
+    DWORD written = 0;
+
+    if (ReadFile(hPipe, req, 2047, &read, NULL) && read > 0) {
+        req[read] = '\0';
+        IpcWorkItem* workItem = new IpcWorkItem();
+        strncpy_s(workItem->request, sizeof(workItem->request), req, _TRUNCATE);
+        workItem->response[0] = '\0';
+        workItem->maxLen = 65535;
+        workItem->releaseByWorker = 0;
+
+        HANDLE hWorkThread = CreateThread(NULL, 0, DoIpcWorkThread, workItem, 0, NULL);
+        if (!hWorkThread) {
+            const char* errRes = "{\"success\":false,\"error\":\"Hook Worker Launch Failed\"}";
+            WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
+            FlushFileBuffers(hPipe);
+            delete workItem;
+        } else {
+            DWORD waitRc = WaitForSingleObject(hWorkThread, kWorkerTimeoutMs);
+            if (waitRc == WAIT_OBJECT_0) {
+                int resLen = (int)strlen(workItem->response);
+                if (resLen > 0) {
+                    WriteFile(hPipe, workItem->response, (DWORD)resLen, &written, NULL);
+                    FlushFileBuffers(hPipe);
+                }
+                delete workItem;
+            } else {
+                const char* timeoutRes = "{\"success\":false,\"error\":\"Hook Worker Timeout\"}";
+                WriteFile(hPipe, timeoutRes, (DWORD)strlen(timeoutRes), &written, NULL);
+                FlushFileBuffers(hPipe);
+                InterlockedExchange(&workItem->releaseByWorker, 1);
+            }
+            CloseHandle(hWorkThread);
+        }
+    }
+
+    DisconnectNamedPipe(hPipe);
+    CloseHandle(hPipe);
+    InterlockedDecrement(&g_ActivePipeClients);
+    CoUninitialize();
+    return 0;
+}
+
 DWORD WINAPI PipeThread(LPVOID) {
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     
@@ -109,18 +178,24 @@ DWORD WINAPI PipeThread(LPVOID) {
                 CloseHandle(hPipe);
                 break;
             }
-            char req[2048]; DWORD read, written;
-            if (ReadFile(hPipe, req, 2047, &read, NULL) && read > 0) {
-                req[read] = '\0';
-                char res[65536] = {};
-                DoIpcWork(req, res, 65535);
-                
-                int resLen = (int)strlen(res);
-                if (resLen > 0) {
-                    WriteFile(hPipe, res, (DWORD)resLen, &written, NULL);
-                    FlushFileBuffers(hPipe);
-                }
+            LONG active = InterlockedIncrement(&g_ActivePipeClients);
+            if (active > kMaxConcurrentPipeClients) {
+                InterlockedDecrement(&g_ActivePipeClients);
+                const char* busyRes = "{\"success\":false,\"error\":\"Hook Busy\"}";
+                DWORD written = 0;
+                WriteFile(hPipe, busyRes, (DWORD)strlen(busyRes), &written, NULL);
+                FlushFileBuffers(hPipe);
+                DisconnectNamedPipe(hPipe);
+                CloseHandle(hPipe);
+                continue;
             }
+
+            HANDLE hClientThread = CreateThread(NULL, 0, HandlePipeClientThread, hPipe, 0, NULL);
+            if (hClientThread) {
+                CloseHandle(hClientThread);
+                continue;
+            }
+            InterlockedDecrement(&g_ActivePipeClients);
         }
         DisconnectNamedPipe(hPipe);
         CloseHandle(hPipe);
