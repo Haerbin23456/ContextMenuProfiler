@@ -88,7 +88,7 @@ namespace ContextMenuProfiler.UI.Converters
         {
             string? path = value as string;
             
-            if (string.IsNullOrEmpty(path) || path == "NONE") return null;
+            if (string.IsNullOrEmpty(path) || path == "NONE") return DependencyProperty.UnsetValue;
 
             if (_iconCache.TryGetValue(path, out var cached)) return cached;
 
@@ -102,9 +102,9 @@ namespace ContextMenuProfiler.UI.Converters
                 {
                     _iconCache.TryAdd(path, result);
                 }
-                return result;
+                return result ?? DependencyProperty.UnsetValue;
             }
-            catch { return null; }
+            catch { return DependencyProperty.UnsetValue; }
         }
 
         private ImageSource? InnerConvert(string path)
@@ -114,8 +114,9 @@ namespace ContextMenuProfiler.UI.Converters
                 // Handle ms-appx:// URIs (UWP resources)
                 if (path.StartsWith("ms-appx://"))
                 {
-                    path = ResolveMsAppxUri(path);
-                    if (string.IsNullOrEmpty(path)) return null;
+                    var resolvedPath = ResolveMsAppxUri(path);
+                    if (string.IsNullOrEmpty(resolvedPath)) return null;
+                    path = resolvedPath;
                 }
 
                 // Expand environment variables

@@ -22,8 +22,8 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    - name: Build WPF UI
-      run: dotnet build ContextMenuProfiler.UI\ContextMenuProfiler.UI.csproj -c Release
+    - name: Build Solution
+      run: dotnet build ContextMenuProfiler.sln -c Release
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4

@@ -48,7 +48,7 @@ namespace ContextMenuProfiler.UI.Core
 
         private static void ProcessPackage(Package package, List<BenchmarkResult> results, string targetExt, bool scanAll)
         {
-            string installPath = package.InstalledLocation?.Path;
+            string? installPath = package.InstalledLocation?.Path;
             if (string.IsNullOrEmpty(installPath)) return;
 
             string manifestPath = Path.Combine(installPath, "AppxManifest.xml");
@@ -83,7 +83,7 @@ namespace ContextMenuProfiler.UI.Core
 
             foreach (var itemType in itemTypes)
             {
-                string type = itemType.Attribute("Type")?.Value?.ToLower();
+                string? type = itemType.Attribute("Type")?.Value?.ToLower();
                 if (string.IsNullOrEmpty(type)) continue;
 
                 if (!scanAll && !IsTypeMatch(type, targetExt)) continue;
@@ -91,7 +91,7 @@ namespace ContextMenuProfiler.UI.Core
                 var verbs = itemType.Descendants().Where(e => e.Name.LocalName == "Verb");
                 foreach (var verb in verbs)
                 {
-                    if (TryParseVerb(package, verb, clsidToPath, installPath, out var result))
+                    if (TryParseVerb(package, verb, clsidToPath, installPath, out var result) && result != null)
                     {
                         if (!results.Any(r => r.Clsid == result.Clsid))
                             results.Add(result);
@@ -101,19 +101,19 @@ namespace ContextMenuProfiler.UI.Core
         }
 
         private static bool TryParseVerb(Package package, XElement verb, Dictionary<Guid, string> clsidToPath, 
-            string installPath, out BenchmarkResult result)
+            string installPath, out BenchmarkResult? result)
         {
             result = null;
-            string clsidStr = verb.Attribute("Clsid")?.Value;
+            string? clsidStr = verb.Attribute("Clsid")?.Value;
             if (!Guid.TryParse(clsidStr, out Guid clsid)) return false;
 
             string name = package.DisplayName;
             if (string.IsNullOrEmpty(name)) name = package.Id.Name;
             
-            string verbId = verb.Attribute("Id")?.Value;
+            string? verbId = verb.Attribute("Id")?.Value;
             if (!string.IsNullOrEmpty(verbId)) name += $" ({verbId})";
 
-            string logoPath = ResolveBestLogo(package, verb.Document, installPath);
+            string? logoPath = ResolveBestLogo(package, verb.Document, installPath);
             string binaryPath = clsidToPath.TryGetValue(clsid, out var relPath) ? 
                                 ResolveBinaryPath(installPath, relPath) : installPath;
 
@@ -135,12 +135,13 @@ namespace ContextMenuProfiler.UI.Core
             return true;
         }
 
-        private static string ResolveBestLogo(Package package, XDocument doc, string installPath)
+        private static string? ResolveBestLogo(Package package, XDocument? doc, string installPath)
         {
             try
             {
+                if (doc == null) return null;
                 // 1. 尝试从 XML 提取相对路径
-                string relativeLogo = ExtractRelativeLogoFromManifest(doc);
+                string? relativeLogo = ExtractRelativeLogoFromManifest(doc);
                 if (string.IsNullOrEmpty(relativeLogo)) return null;
                 
                 // 2. 统一返回 ms-appx 协议，让 Converter 的智能逻辑去处理缩放和稀疏包路径
@@ -150,7 +151,7 @@ namespace ContextMenuProfiler.UI.Core
             catch { return null; }
         }
 
-        private static string ExtractRelativeLogoFromManifest(XDocument doc)
+        private static string? ExtractRelativeLogoFromManifest(XDocument doc)
         {
             var visualElements = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "VisualElements");
             if (visualElements != null)
@@ -170,8 +171,8 @@ namespace ContextMenuProfiler.UI.Core
 
             foreach (var cls in classes)
             {
-                string idStr = cls.Attribute("Id")?.Value;
-                string path = cls.Attribute("Path")?.Value;
+                string? idStr = cls.Attribute("Id")?.Value;
+                string? path = cls.Attribute("Path")?.Value;
                 if (Guid.TryParse(idStr, out Guid guid) && !string.IsNullOrEmpty(path))
                 {
                     map[guid] = path;

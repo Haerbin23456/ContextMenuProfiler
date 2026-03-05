@@ -447,7 +447,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             {
                 var results = await Task.Run(() =>
                 {
-                    List<BenchmarkResult> threadResult = null;
+                    List<BenchmarkResult>? threadResult = null;
                     var thread = new Thread(() =>
                     {
                         try
@@ -462,10 +462,10 @@ namespace ContextMenuProfiler.UI.ViewModels
                     thread.SetApartmentState(ApartmentState.STA);
                     thread.Start();
                     thread.Join();
-                    return threadResult;
+                    return threadResult ?? new List<BenchmarkResult>();
                 });
 
-                if (results != null)
+                if (results.Count > 0)
                 {
                     // Use InsertSorted logic for consistency and performance
                     foreach (var res in results.OrderByDescending(r => r.TotalTime))

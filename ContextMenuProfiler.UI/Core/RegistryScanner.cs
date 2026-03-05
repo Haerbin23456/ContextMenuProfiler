@@ -70,7 +70,7 @@ namespace ContextMenuProfiler.UI.Core
                         ScanLocation(handlers, $"SystemFileAssociations\\{keyName}\\shellex\\-ContextMenuHandlers", $"Extension ({keyName}) [Disabled]");
 
                         // Get ProgID
-                        string progId = GetProgID(keyName);
+                        string? progId = GetProgID(keyName);
                         if (!string.IsNullOrEmpty(progId))
                         {
                             ScanLocation(handlers, $"{progId}\\shellex\\ContextMenuHandlers", $"ProgID ({progId} for {keyName})");
@@ -109,7 +109,7 @@ namespace ContextMenuProfiler.UI.Core
                         {
                             using (var subKey = key.OpenSubKey(subKeyName))
                             {
-                                object val = subKey?.GetValue("");
+                                object? val = subKey?.GetValue("");
                                 if (val is string guidStr)
                                 {
                                     string trimmedGuid = guidStr.Trim();
@@ -146,7 +146,7 @@ namespace ContextMenuProfiler.UI.Core
             }
         }
 
-        private static string GetProgID(string ext)
+        private static string? GetProgID(string ext)
         {
             try
             {
@@ -213,7 +213,7 @@ namespace ContextMenuProfiler.UI.Core
                             if (string.IsNullOrEmpty(command)) continue;
 
                             // Get Display Name (MUIVerb > Default)
-                            string displayName = verbKey.GetValue("MUIVerb") as string;
+                            string? displayName = verbKey.GetValue("MUIVerb") as string;
                             if (string.IsNullOrEmpty(displayName))
                             {
                                 displayName = verbKey.GetValue("") as string; // Default value
