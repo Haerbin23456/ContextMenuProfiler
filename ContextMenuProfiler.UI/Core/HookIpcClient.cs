@@ -37,10 +37,9 @@ namespace ContextMenuProfiler.UI.Core
     public static class HookIpcClient
     {
         private const string PipeName = "ContextMenuProfilerHook";
-        private const int LockAcquireTimeoutMs = 5000;
-        private const int ConnectTimeoutMs = 500;
-        private const int RoundTripTimeoutMs = 3500;
-        internal static readonly SemaphoreSlim IpcLock = new SemaphoreSlim(1, 1);
+        private const int ConnectTimeoutMs = 1200;
+        private const int RoundTripTimeoutMs = 2000;
+        internal static readonly SemaphoreSlim IpcLock = new SemaphoreSlim(3, 3);
 
         public static async Task<HookCallResult> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null)
         {
@@ -61,18 +60,10 @@ namespace ContextMenuProfiler.UI.Core
                     try
                     {
                         var swLock = Stopwatch.StartNew();
-                        hasLock = await IpcLock.WaitAsync(LockAcquireTimeoutMs);
+                        await IpcLock.WaitAsync();
+                        hasLock = true;
                         swLock.Stop();
                         result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
-                        if (!hasLock)
-                        {
-                            if (attempt == 0)
-                            {
-                                await Task.Delay(150);
-                                continue;
-                            }
-                            return result;
-                        }
 
                         using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
                         {
@@ -88,7 +79,7 @@ namespace ContextMenuProfiler.UI.Core
                                 Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
                                 if (attempt == 0)
                                 {
-                                    await Task.Delay(120);
+                                    await Task.Delay(80);
                                     continue;
                                 }
                                 return result;
@@ -97,24 +88,26 @@ namespace ContextMenuProfiler.UI.Core
                             result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
 
                             var swRoundTrip = Stopwatch.StartNew();
+                            using var roundTripCts = new CancellationTokenSource(RoundTripTimeoutMs);
                             // Format: "CLSID|Path[|DllHint]"
                             string requestStr = string.IsNullOrEmpty(dllHint) ? $"{clsid}|{path}" : $"{clsid}|{path}|{dllHint}";
                             byte[] request = Encoding.UTF8.GetBytes(requestStr);
-                            await client.WriteAsync(request, 0, request.Length);
+                            await client.WriteAsync(request, 0, request.Length, roundTripCts.Token);
+                            await client.FlushAsync(roundTripCts.Token);
 
                             byte[] responseBuf = new byte[65536];
                             int read;
                             try
                             {
-                                read = await client.ReadAsync(responseBuf, 0, responseBuf.Length).WaitAsync(TimeSpan.FromMilliseconds(RoundTripTimeoutMs));
+                                read = await client.ReadAsync(responseBuf, 0, responseBuf.Length, roundTripCts.Token);
                             }
-                            catch (TimeoutException)
+                            catch (OperationCanceledException)
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
                                 if (attempt == 0)
                                 {
-                                    await Task.Delay(120);
+                                    await Task.Delay(80);
                                     continue;
                                 }
                                 return result;
@@ -126,7 +119,7 @@ namespace ContextMenuProfiler.UI.Core
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
                                 if (attempt == 0)
                                 {
-                                    await Task.Delay(120);
+                                    await Task.Delay(80);
                                     continue;
                                 }
                                 return result;
@@ -150,7 +143,7 @@ namespace ContextMenuProfiler.UI.Core
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
                                 if (attempt == 0)
                                 {
-                                    await Task.Delay(120);
+                                    await Task.Delay(80);
                                     continue;
                                 }
                                 return result;
@@ -161,7 +154,7 @@ namespace ContextMenuProfiler.UI.Core
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
                                 if (attempt == 0)
                                 {
-                                    await Task.Delay(120);
+                                    await Task.Delay(80);
                                     continue;
                                 }
                                 return result;
@@ -173,7 +166,7 @@ namespace ContextMenuProfiler.UI.Core
                         Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
                         if (attempt == 0)
                         {
-                            await Task.Delay(120);
+                            await Task.Delay(80);
                             continue;
                         }
                         return result;

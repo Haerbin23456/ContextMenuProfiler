@@ -56,6 +56,9 @@ namespace ContextMenuProfiler.UI.Core
 
     public class BenchmarkService
     {
+        private static readonly bool SkipKnownUnstableHandlers =
+            string.Equals(Environment.GetEnvironmentVariable("CMP_SKIP_UNSTABLE_HANDLERS"), "1", StringComparison.OrdinalIgnoreCase);
+
         private static readonly string[] KnownUnstableHandlerTokens =
         {
             "PintoStartScreen",
@@ -185,7 +188,7 @@ namespace ContextMenuProfiler.UI.Core
         {
             if (!result.Clsid.HasValue) return;
 
-            if (IsKnownUnstableHandler(result))
+            if (SkipKnownUnstableHandlers && IsKnownUnstableHandler(result))
             {
                 result.Status = "Skipped (Known Unstable)";
                 result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
@@ -244,17 +247,25 @@ namespace ContextMenuProfiler.UI.Core
             }
             else if (hookData != null && !hookData.success)
             {
-                result.Status = "Load Error";
-                result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
+                if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Status = "IPC Timeout";
+                    result.DetailedStatus = $"Hook service timed out while probing this extension. Error: {hookData.error}";
+                }
+                else
+                {
+                    result.Status = "Load Error";
+                    result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
+                }
             }
             else if (hookData == null)
             {
                 if (result.Status != "Load Error" && result.Status != "Orphaned / Missing DLL")
                 {
-                    if (string.Equals(result.Type, "UWP", StringComparison.OrdinalIgnoreCase))
+                    if (hookCall.roundtrip_ms >= 1900)
                     {
-                        result.Status = "Unsupported (UWP)";
-                        result.DetailedStatus = "This UWP/packaged extension could not be benchmarked via current Hook path on this system.";
+                        result.Status = "IPC Timeout";
+                        result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";
                     }
                     else
                     {
