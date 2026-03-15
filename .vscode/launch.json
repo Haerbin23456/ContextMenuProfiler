@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ContextMenuProfiler.UI",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/ContextMenuProfiler.UI/bin/Debug/net8.0-windows10.0.19041.0/ContextMenuProfiler.UI.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/ContextMenuProfiler.UI",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

@@ -160,7 +160,11 @@ namespace ContextMenuProfiler.UI.Core
             // Copy values
             foreach (var valueName in source.GetValueNames())
             {
-                dest.SetValue(valueName, source.GetValue(valueName), source.GetValueKind(valueName));
+                var value = source.GetValue(valueName);
+                if (value != null)
+                {
+                    dest.SetValue(valueName, value, source.GetValueKind(valueName));
+                }
             }
 
             // Copy subkeys
@@ -169,7 +173,10 @@ namespace ContextMenuProfiler.UI.Core
                 using (var srcSub = source.OpenSubKey(subKeyName))
                 using (var destSub = dest.CreateSubKey(subKeyName))
                 {
-                    CopyRegistryKey(srcSub, destSub);
+                    if (srcSub != null && destSub != null)
+                    {
+                        CopyRegistryKey(srcSub, destSub);
+                    }
                 }
             }
         }

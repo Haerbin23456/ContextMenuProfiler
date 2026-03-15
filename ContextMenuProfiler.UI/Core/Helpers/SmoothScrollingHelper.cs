@@ -25,7 +25,7 @@ namespace ContextMenuProfiler.UI.Core.Helpers
             }
         }
 
-        private static void Element_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        private static void Element_PreviewMouseWheel(object? sender, MouseWheelEventArgs e)
         {
             var uiElement = sender as UIElement;
             var scrollViewer = FindParentScrollViewer(uiElement);
@@ -38,8 +38,9 @@ namespace ContextMenuProfiler.UI.Core.Helpers
             GetSmoother(scrollViewer).DoScroll(e.Delta);
         }
 
-        private static ScrollViewer FindParentScrollViewer(DependencyObject child)
+        private static ScrollViewer? FindParentScrollViewer(DependencyObject? child)
         {
+            if (child == null) return null;
             var parent = VisualTreeHelper.GetParent(child);
             while (parent != null && !(parent is ScrollViewer))
             {
@@ -89,7 +90,7 @@ namespace ContextMenuProfiler.UI.Core.Helpers
                 }
             }
 
-            private void OnRendering(object sender, EventArgs e)
+            private void OnRendering(object? sender, EventArgs e)
             {
                 double current = _sv.VerticalOffset;
                 double diff = _targetOffset - current;

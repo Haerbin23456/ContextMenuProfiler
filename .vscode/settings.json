@@ -1,0 +1,9 @@
+{
+    "dotnet.defaultSolution": "ContextMenuProfiler.sln",
+    "files.watcherExclude": {
+        "**/wpfui-repo/**": true,
+        "**/ContextMenuManager-repo/**": true
+    },
+    "omnisharp.path": "latest",
+    "omnisharp.useModernNet": true
+}

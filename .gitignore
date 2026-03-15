@@ -16,10 +16,10 @@ crash_log.txt
 *.ilk
 
 # VS Code
-.vscode/
-! .vscode/launch.json
-! .vscode/tasks.json
-! .vscode/settings.json
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
 .trae/
 
 # .NET / C#

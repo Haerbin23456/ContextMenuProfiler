@@ -16,7 +16,7 @@ namespace ContextMenuProfiler.UI.Core.Services
             try 
             {
                 var dir = Path.GetDirectoryName(LogFile);
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
             }
             catch { /* Best effort */ }
         }

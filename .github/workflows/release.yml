@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -55,6 +56,7 @@ jobs:
         if (!(Test-Path "artifacts/ContextMenuProfiler-win-x64-self-contained.zip")) { throw "self-contained zip missing" }
 
     - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
         draft: false

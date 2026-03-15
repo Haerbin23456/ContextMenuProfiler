@@ -130,7 +130,7 @@ namespace ContextMenuProfiler.UI
             }
         }
 
-        private T FindChild<T>(DependencyObject parent) where T : DependencyObject
+        private T? FindChild<T>(DependencyObject? parent) where T : DependencyObject
         {
             if (parent == null) return null;
 
