@@ -326,6 +326,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             _lastScanMode = "System";
             StatusText = LocalizationService.Instance["Dashboard.Status.ScanningSystem"];
             IsBusy = true;
+            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
             
             App.Current.Dispatcher.Invoke(() =>
             {
@@ -374,6 +375,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                 producerCompleted = true;
                 TryCompleteUiDrain();
                 await uiDrainTcs.Task;
+
+                // Ensure summary values are refreshed even if no progress callback was emitted.
+                UpdateStats();
 
                 StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], Results.Count);
                 NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], Results.Count));
@@ -477,8 +481,6 @@ namespace ContextMenuProfiler.UI.ViewModels
                     NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"], results.Count, System.IO.Path.GetFileName(filePath)));
                 }
 
-                // Run Real-World Benchmark (Parallel but after discovery to avoid COM conflicts if any)
-                await RunRealBenchmark(filePath);
             }
             catch (Exception ex)
             {
@@ -490,26 +492,6 @@ namespace ContextMenuProfiler.UI.ViewModels
             finally
             {
                 IsBusy = false;
-            }
-        }
-
-        private async Task RunRealBenchmark(string? filePath = null)
-        {
-            try
-            {
-                long elapsed = await Task.Run(() => _benchmarkService.RunRealShellBenchmark(filePath));
-                if (elapsed >= 0)
-                {
-                    RealLoadTime = $"{elapsed} ms";
-                }
-                else
-                {
-                    RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Failed"];
-                }
-            }
-            catch
-            {
-                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
             }
         }
 
@@ -721,6 +703,12 @@ namespace ContextMenuProfiler.UI.ViewModels
             TotalLoadTime = totalTime;
             ActiveLoadTime = activeTime;
             DisabledLoadTime = disabledTime;
+
+            // "Real load" uses wall-clock IPC time when available; fall back to measured COM stage total.
+            long realLoadMs = Results
+                .Where(r => r.IsEnabled)
+                .Sum(r => r.WallClockTime > 0 ? r.WallClockTime : Math.Max(0, r.TotalTime));
+            RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : "N/A";
         }
     }
 }
