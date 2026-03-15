@@ -480,7 +480,7 @@ namespace ContextMenuProfiler.UI.Core
             return RunSystemBenchmark(ScanMode.Targeted); // Simplified for now
         }
 
-        public long RunRealShellBenchmark(string? filePath = null) => 0;
+        public long RunRealShellBenchmark(string? filePath = null) => -1;
 
         private string DetermineCategory(IEnumerable<string> locations)
         {
