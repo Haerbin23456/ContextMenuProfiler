@@ -42,6 +42,12 @@ static void AssertNull(string? value, string caseName)
     }
 }
 
+static void AssertSourceDoesNotContainAny(string source, string caseName, params string[] forbiddenLiterals)
+{
+    var hit = forbiddenLiterals.Where(l => source.Contains($"\"{l}\"", StringComparison.Ordinal)).ToList();
+    AssertTrue(hit.Count == 0, caseName, hit.Count == 0 ? null : string.Join(", ", hit));
+}
+
 string requestWithoutHint = HookIpcClient.BuildRequest("{00000000-0000-0000-0000-000000000000}", @"C:\Temp\a.txt", null);
 AssertEqual("CMP1|AUTO|{00000000-0000-0000-0000-000000000000}|C:\\Temp\\a.txt", requestWithoutHint, "BuildRequestWithoutHint");
 
@@ -101,6 +107,15 @@ foreach (var key in criticalKeys)
 string benchmarkServicePath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
 string benchmarkServiceSource = File.ReadAllText(benchmarkServicePath);
 
+string packageScannerPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
+string packageScannerSource = File.ReadAllText(packageScannerPath);
+
+string dashboardViewModelPath = FindFileUpward(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
+string dashboardViewModelSource = File.ReadAllText(dashboardViewModelPath);
+
+string statusVisibilityConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
+string statusVisibilityConverterSource = File.ReadAllText(statusVisibilityConverterPath);
+
 AssertTrue(
     benchmarkServiceSource.Contains("RunBenchmarkAsync(targetPath)", StringComparison.Ordinal),
     "AnalyzeFileUsesPathSpecificBenchmark"
@@ -111,6 +126,22 @@ AssertTrue(
     "AnalyzeFileDoesNotFallbackToSystemScan"
 );
 
+string[] forbiddenStatusMagicLiterals =
+{
+    "Registry Fallback",
+    "Load Error",
+    "Orphaned / Missing DLL",
+    "IPC Timeout",
+    "Verified via Hook",
+    "Hook Loaded (No Menu)",
+    "Skipped (Known Unstable)"
+};
+
+AssertSourceDoesNotContainAny(benchmarkServiceSource, "BenchmarkServiceNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
+AssertSourceDoesNotContainAny(packageScannerSource, "PackageScannerNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
+AssertSourceDoesNotContainAny(dashboardViewModelSource, "DashboardViewModelNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
+AssertSourceDoesNotContainAny(statusVisibilityConverterSource, "StatusVisibilityConverterNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
+
 Console.WriteLine("Quality checks passed.");
 
 if (string.Equals(Environment.GetEnvironmentVariable("CMP_LIVE_PROBE"), "1", StringComparison.Ordinal))
@@ -118,6 +149,6 @@ if (string.Equals(Environment.GetEnvironmentVariable("CMP_LIVE_PROBE"), "1", Str
     var service = new BenchmarkService();
     var results = await service.RunSystemBenchmarkAsync(ScanMode.Targeted);
     var measured = results.Count(r => r.TotalTime > 0);
-    var fallback = results.Count(r => string.Equals(r.Status, "Registry Fallback", StringComparison.OrdinalIgnoreCase));
+    var fallback = results.Count(r => string.Equals(r.Status, BenchmarkSemantics.Status.RegistryFallback, StringComparison.OrdinalIgnoreCase));
     Console.WriteLine($"Live probe: total={results.Count}, measured={measured}, fallback={fallback}");
 }
