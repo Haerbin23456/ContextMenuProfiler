@@ -553,7 +553,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                             ExtensionManager.DisableRegistryKey(entry.Path);
                         }
                     }
-                    item.Status = "Disabled (Pending Restart)";
+                    item.Status = LocalizationService.Instance["Dashboard.Status.DisabledPendingRestart"];
                 }
                 else // User turned it ON (IsEnabled is now true)
                 {
@@ -569,7 +569,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                             ExtensionManager.EnableRegistryKey(entry.Path);
                         }
                     }
-                    item.Status = "Enabled (Pending Restart)";
+                    item.Status = LocalizationService.Instance["Dashboard.Status.EnabledPendingRestart"];
                 }
                 
                 UpdateStats();
@@ -577,7 +577,7 @@ namespace ContextMenuProfiler.UI.ViewModels
              catch (Exception ex)
              {
                  LogService.Instance.Error("Toggle Extension Failed", ex);
-                 NotificationService.Instance.ShowError("Toggle Failed", ex.Message);
+                 NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ToggleFailed.Title"], ex.Message);
                  // Revert
                  item.IsEnabled = !item.IsEnabled;
              }
@@ -590,14 +590,16 @@ namespace ContextMenuProfiler.UI.ViewModels
             
             if (item.Type == "UWP")
             {
-                NotificationService.Instance.ShowWarning("Not Supported", "Deleting UWP extensions is not supported. Use Disable instead.");
+                NotificationService.Instance.ShowWarning(
+                    LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Message"]);
                 return;
             }
 
             // Confirm
             var result = System.Windows.MessageBox.Show(
-                $"Are you sure you want to permanently delete the extension '{item.Name}'?\n\nThis action will remove the registry keys and cannot be undone.", 
-                "Confirm Delete", 
+                string.Format(LocalizationService.Instance["Dashboard.Dialog.ConfirmDelete.Message"], item.Name),
+                LocalizationService.Instance["Dashboard.Dialog.ConfirmDelete.Title"],
                 System.Windows.MessageBoxButton.YesNo, 
                 System.Windows.MessageBoxImage.Warning);
                 
@@ -618,12 +620,14 @@ namespace ContextMenuProfiler.UI.ViewModels
                 DisplayResults.Remove(item);
                 UpdateStats();
                 
-                NotificationService.Instance.ShowSuccess("Deleted", $"Extension '{item.Name}' has been deleted.");
+                NotificationService.Instance.ShowSuccess(
+                    LocalizationService.Instance["Dashboard.Notify.DeleteSuccess.Title"],
+                    string.Format(LocalizationService.Instance["Dashboard.Notify.DeleteSuccess.Message"], item.Name));
             }
             catch (Exception ex)
             {
                 LogService.Instance.Error("Delete Extension Failed", ex);
-                NotificationService.Instance.ShowError("Delete Failed", ex.Message);
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.DeleteFailed.Title"], ex.Message);
             }
         }
 
@@ -638,7 +642,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                     try
                     {
                         Clipboard.SetText(clsid);
-                        NotificationService.Instance.ShowSuccess("Copied", "CLSID copied to clipboard.");
+                        NotificationService.Instance.ShowSuccess(
+                            LocalizationService.Instance["Dashboard.Notify.CopySuccess.Title"],
+                            LocalizationService.Instance["Dashboard.Notify.CopySuccess.Message"]);
                         return;
                     }
                     catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.ErrorCode == 0x800401D0)
@@ -652,7 +658,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                         break;
                     }
                 }
-                NotificationService.Instance.ShowError("Copy Failed", "Clipboard is locked by another process.");
+                NotificationService.Instance.ShowError(
+                    LocalizationService.Instance["Dashboard.Notify.CopyFailed.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.CopyFailed.Message"]);
             }
         }
 
@@ -682,7 +690,9 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
             catch (Exception)
             {
-                NotificationService.Instance.ShowError("Error", "Failed to open registry editor.");
+                NotificationService.Instance.ShowError(
+                    LocalizationService.Instance["Dashboard.Notify.OpenRegistryFailed.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.OpenRegistryFailed.Message"]);
             }
         }
 
