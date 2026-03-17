@@ -7,6 +7,7 @@
       xmlns:pages="clr-namespace:ContextMenuProfiler.UI.Views.Pages"
       xmlns:viewmodels="clr-namespace:ContextMenuProfiler.UI.ViewModels"
       xmlns:converters="clr-namespace:ContextMenuProfiler.UI.Converters"
+      xmlns:core="clr-namespace:ContextMenuProfiler.UI.Core"
       xmlns:services="clr-namespace:ContextMenuProfiler.UI.Core.Services"
       xmlns:helpers="clr-namespace:ContextMenuProfiler.UI.Core.Helpers"
       mc:Ignorable="d" 
@@ -342,16 +343,16 @@
                                                         <Setter Property="Foreground" Value="#FFC107"/> <!-- Default Yellow for Warnings -->
                                                         <Setter Property="Visibility" Value="{Binding Status, Converter={StaticResource StatusToVisibilityConverter}}"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Registry Fallback">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusRegistryFallback}">
                                                                 <Setter Property="Foreground" Value="#FFC107"/> <!-- Yellow for global Hook failure -->
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Hook Loaded (No Menu)">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusHookLoadedNoMenu}">
                                                                 <Setter Property="Foreground" Value="#FFC107"/> <!-- Yellow for empty menu -->
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -384,10 +385,10 @@
                                                                 <Style TargetType="ui:SymbolIcon">
                                                                     <Setter Property="Foreground" Value="#FFC107"/> <!-- Default Yellow -->
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
@@ -399,10 +400,10 @@
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Foreground" Value="#FFC107"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
@@ -472,16 +473,16 @@
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Registry Fallback">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusRegistryFallback}">
                                                             <Setter Property="Foreground" Value="#FFC107"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Hook Loaded (No Menu)">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusHookLoadedNoMenu}">
                                                             <Setter Property="Foreground" Value="#FFC107"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>

@@ -4,6 +4,11 @@ namespace ContextMenuProfiler.UI.Core
 {
     public static class BenchmarkSemantics
     {
+        public const string StatusRegistryFallback = Status.RegistryFallback;
+        public const string StatusHookLoadedNoMenu = Status.HookLoadedNoMenu;
+        public const string StatusLoadError = Status.LoadError;
+        public const string StatusOrphanedMissingDll = Status.OrphanedMissingDll;
+
         public static class Type
         {
             public const string Com = "COM";
