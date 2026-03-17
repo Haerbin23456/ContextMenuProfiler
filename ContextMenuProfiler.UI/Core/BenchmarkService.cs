@@ -137,7 +137,7 @@ namespace ContextMenuProfiler.UI.Core
                     await EnrichBenchmarkResultAsync(result, hookContextPath);
 
                     bool isBlocked = ExtensionManager.IsExtensionBlocked(clsid);
-                    bool hasDisabledPath = result.RegistryEntries.Any(e => e.Location.Contains("[Disabled]"));
+                    bool hasDisabledPath = result.RegistryEntries.Any(e => BenchmarkSemantics.IsDisabledRegistryLocation(e.Location));
                     result.IsEnabled = !isBlocked && !hasDisabledPath;
                     result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
 
@@ -167,7 +167,7 @@ namespace ContextMenuProfiler.UI.Core
                         Path = p,
                         Location = $"Registry (Shell) - {p.Split('\\')[0]}"
                     }).ToList(),
-                    InterfaceType = "Static Verb",
+                    InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
                     DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
                     TotalTime = 0,
                     Category = BenchmarkSemantics.Category.Static
@@ -193,7 +193,7 @@ namespace ContextMenuProfiler.UI.Core
                         await EnrichBenchmarkResultAsync(uwpResult, hookContextPath);
 
                         uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
-                        uwpResult.LocationSummary = "Modern Shell (UWP)";
+                        uwpResult.LocationSummary = BenchmarkSemantics.LocationSummary.ModernShellUwp;
 
                         allResults.Add(uwpResult);
                         progress?.Report(uwpResult);
@@ -214,7 +214,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
                 result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
-                result.InterfaceType = "Skipped";
+                result.InterfaceType = BenchmarkSemantics.InterfaceType.Skipped;
                 result.CreateTime = 0;
                 result.InitTime = 0;
                 result.QueryTime = 0;

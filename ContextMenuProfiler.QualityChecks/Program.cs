@@ -145,6 +145,20 @@ AssertSourceDoesNotContainAny(packageScannerSource, "PackageScannerNoStatusMagic
 AssertSourceDoesNotContainAny(dashboardViewModelSource, "DashboardViewModelNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 AssertSourceDoesNotContainAny(statusVisibilityConverterSource, "StatusVisibilityConverterNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 
+string[] forbiddenInterfaceAndLocationLiterals =
+{
+    "Static Verb",
+    "Skipped",
+    "Modern Shell (UWP)",
+    "[Disabled]"
+};
+
+AssertSourceDoesNotContainAny(
+    benchmarkServiceSource,
+    "BenchmarkServiceNoInterfaceLocationMagicLiterals",
+    forbiddenInterfaceAndLocationLiterals
+);
+
 AssertTrue(
     !dashboardViewModelSource.Contains("private static class CategoryTag", StringComparison.Ordinal),
     "DashboardViewModelNoCategoryTagDuplication"

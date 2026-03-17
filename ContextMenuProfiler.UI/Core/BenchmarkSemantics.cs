@@ -79,6 +79,22 @@ namespace ContextMenuProfiler.UI.Core
             public const string AllFileSystemObjects = "All File System Objects";
         }
 
+        public static class InterfaceType
+        {
+            public const string StaticVerb = "Static Verb";
+            public const string Skipped = "Skipped";
+        }
+
+        public static class LocationSummary
+        {
+            public const string ModernShellUwp = "Modern Shell (UWP)";
+        }
+
+        public static class RegistryLocationToken
+        {
+            public const string Disabled = "[Disabled]";
+        }
+
         public static bool IsPackagedExtensionType(string? type)
         {
             if (string.IsNullOrWhiteSpace(type))
@@ -95,6 +111,12 @@ namespace ContextMenuProfiler.UI.Core
         public static bool IsRegistryManagedExtensionType(string? type)
         {
             return !IsPackagedExtensionType(type);
+        }
+
+        public static bool IsDisabledRegistryLocation(string? location)
+        {
+            return !string.IsNullOrWhiteSpace(location)
+                && location.Contains(RegistryLocationToken.Disabled, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)
