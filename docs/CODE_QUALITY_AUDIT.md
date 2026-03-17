@@ -95,6 +95,13 @@
 - CI 接入 `dotnet test`，失败阻断合并。
 - 建立 IPC 基础协议壳（请求头/响应头/错误码）。
 
+#### 阶段 A 已落地进展（2026-03-18）
+- 已新增本地一键验证：`scripts/verify_local.bat`（Hook 构建 + Solution Release 构建 + `ContextMenuProfiler.QualityChecks`）。
+- 已建立语义中心：`ContextMenuProfiler.UI/Core/BenchmarkSemantics.cs`，集中类型/分类/状态常量与判定 helper。
+- 已清理 Dashboard 关键魔法值：`DashboardViewModel`、`Converters`、`DashboardPage.xaml` 改为语义常量或 `x:Static` 引用。
+- 已将 `StatusToVisibilityConverter` 参数从字符串升级为强类型枚举（`StatusVisibilityMode`），并完成 XAML 迁移。
+- 已扩展质量门禁：防止关键状态字面量、类别标签副本、旧式 converter 参数与语义 helper 退化回归。
+
 ### 阶段 B：可靠性加固（P1）
 - 完成 IPC 全量迁移到类型化协议。
 - 统一超时、取消、线程回收和模块卸载收尾策略。

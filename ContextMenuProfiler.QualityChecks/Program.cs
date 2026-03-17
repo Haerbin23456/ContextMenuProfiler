@@ -146,6 +146,9 @@ string dashboardViewModelSource = File.ReadAllText(dashboardViewModelPath);
 string statusVisibilityConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
 string statusVisibilityConverterSource = File.ReadAllText(statusVisibilityConverterPath);
 
+string typeToIconConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\TypeToIconConverter.cs");
+string typeToIconConverterSource = File.ReadAllText(typeToIconConverterPath);
+
 string dashboardPageXamlPath = FindFileUpward(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
 string dashboardPageXamlSource = File.ReadAllText(dashboardPageXamlPath);
 
@@ -197,6 +200,26 @@ AssertTrue(
 AssertTrue(
     dashboardViewModelSource.Contains("BenchmarkSemantics.IsCategoryMatch", StringComparison.Ordinal),
     "DashboardViewModelUsesCentralizedCategoryMatch"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("BenchmarkSemantics.IsPackagedExtensionType(item.Type)", StringComparison.Ordinal),
+    "DashboardViewModelUsesPackagedTypeSemanticHelper"
+);
+
+AssertTrue(
+    !dashboardViewModelSource.Contains("string.Equals(item.Type, BenchmarkSemantics.Type.Uwp", StringComparison.Ordinal),
+    "DashboardViewModelNoUwpOnlyDeleteCheck"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type)", StringComparison.Ordinal),
+    "BenchmarkServiceUsesRegistryManagedSemanticHelper"
+);
+
+AssertTrue(
+    typeToIconConverterSource.Contains("BenchmarkSemantics.IsPackagedExtensionType(type)", StringComparison.Ordinal),
+    "TypeToIconConverterUsesPackagedTypeSemanticHelper"
 );
 
 string[] forbiddenLegacyStatusConverterBindings =
