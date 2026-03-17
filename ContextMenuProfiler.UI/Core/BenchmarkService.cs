@@ -242,7 +242,7 @@ namespace ContextMenuProfiler.UI.Core
                 if (!string.IsNullOrEmpty(hookData.names))
                 {
                     // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
-                    if (!string.Equals(result.Type, BenchmarkSemantics.Type.Uwp, StringComparison.OrdinalIgnoreCase))
+                    if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
                     {
                         result.Name = hookData.names.Replace("|", ", ");
                     }

@@ -92,6 +92,11 @@ namespace ContextMenuProfiler.UI.Core
                 || string.Equals(type, Type.UwpPackagedCom, StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsRegistryManagedExtensionType(string? type)
+        {
+            return !IsPackagedExtensionType(type);
+        }
+
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)
         {
             if (string.IsNullOrWhiteSpace(selectedCategory)

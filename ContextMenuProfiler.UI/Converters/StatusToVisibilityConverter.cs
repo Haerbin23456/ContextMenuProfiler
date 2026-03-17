@@ -11,7 +11,8 @@ namespace ContextMenuProfiler.UI.Converters
     {
         Default,
         NotActive,
-        NotUwp,
+        NotPackaged,
+        NotUwp = NotPackaged,
         Fallback,
         Inverse
     }
@@ -27,10 +28,10 @@ namespace ContextMenuProfiler.UI.Converters
                 return hookStatus != HookStatus.Active ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            if (mode == StatusVisibilityMode.NotUwp)
+            if (mode == StatusVisibilityMode.NotPackaged)
             {
                 string? type = value as string;
-                return !BenchmarkSemantics.IsPackagedExtensionType(type) ? Visibility.Visible : Visibility.Collapsed;
+                return BenchmarkSemantics.IsRegistryManagedExtensionType(type) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (mode == StatusVisibilityMode.Fallback)

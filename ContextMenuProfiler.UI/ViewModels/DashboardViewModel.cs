@@ -588,7 +588,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (item == null) return;
             
-            if (string.Equals(item.Type, BenchmarkSemantics.Type.Uwp, StringComparison.OrdinalIgnoreCase))
+            if (BenchmarkSemantics.IsPackagedExtensionType(item.Type))
             {
                 NotificationService.Instance.ShowWarning(
                     LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Title"],

@@ -174,7 +174,7 @@ foreach (var legacyBinding in forbiddenLegacyStatusConverterBindings)
 AssertTrue(
     dashboardPageXamlSource.Contains("StatusVisibilityMode.NotActive", StringComparison.Ordinal)
     && dashboardPageXamlSource.Contains("StatusVisibilityMode.Fallback", StringComparison.Ordinal)
-    && dashboardPageXamlSource.Contains("StatusVisibilityMode.NotUwp", StringComparison.Ordinal),
+    && dashboardPageXamlSource.Contains("StatusVisibilityMode.NotPackaged", StringComparison.Ordinal),
     "DashboardPageUsesTypedStatusVisibilityModes"
 );
 

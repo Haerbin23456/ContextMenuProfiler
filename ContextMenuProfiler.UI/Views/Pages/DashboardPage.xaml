@@ -604,7 +604,7 @@
                                     <ui:Button Content="{Binding [Dashboard.Action.DeletePermanently], Source={x:Static services:LocalizationService.Instance}}" Appearance="Danger" Icon="{ui:SymbolIcon Symbol=Delete24}"
                                                Command="{Binding DataContext.DeleteExtensionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                CommandParameter="{Binding}"
-                                               Visibility="{Binding Type, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter={x:Static converters:StatusVisibilityMode.NotUwp}}"/>
+                                               Visibility="{Binding Type, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter={x:Static converters:StatusVisibilityMode.NotPackaged}}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Expander>
