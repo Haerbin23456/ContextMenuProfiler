@@ -7,24 +7,33 @@ using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Converters
 {
+    public enum StatusVisibilityMode
+    {
+        Default,
+        NotActive,
+        NotUwp,
+        Fallback,
+        Inverse
+    }
+
     public class StatusToVisibilityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            string? param = parameter as string;
+            StatusVisibilityMode mode = ResolveMode(parameter);
 
-            if (param == "NotActive" && value is HookStatus hookStatus)
+            if (mode == StatusVisibilityMode.NotActive && value is HookStatus hookStatus)
             {
                 return hookStatus != HookStatus.Active ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            if (param == "NotUWP")
+            if (mode == StatusVisibilityMode.NotUwp)
             {
                 string? type = value as string;
                 return !BenchmarkSemantics.IsPackagedExtensionType(type) ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            if (param == "Fallback")
+            if (mode == StatusVisibilityMode.Fallback)
             {
                 string? statusStr = value as string;
                 bool isFallback = BenchmarkSemantics.IsFallbackLikeStatus(statusStr);
@@ -35,7 +44,7 @@ namespace ContextMenuProfiler.UI.Converters
             {
                 bool isWarning = BenchmarkSemantics.IsWarningLikeStatus(status);
                 
-                if (param == "Inverse")
+                if (mode == StatusVisibilityMode.Inverse)
                 {
                     return isWarning ? Visibility.Collapsed : Visibility.Visible;
                 }
@@ -43,6 +52,22 @@ namespace ContextMenuProfiler.UI.Converters
                 return isWarning ? Visibility.Visible : Visibility.Collapsed;
             }
             return Visibility.Collapsed;
+        }
+
+        private static StatusVisibilityMode ResolveMode(object? parameter)
+        {
+            if (parameter is StatusVisibilityMode typedMode)
+            {
+                return typedMode;
+            }
+
+            if (parameter is string raw
+                && Enum.TryParse(raw, ignoreCase: true, out StatusVisibilityMode parsedMode))
+            {
+                return parsedMode;
+            }
+
+            return StatusVisibilityMode.Default;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

@@ -31,6 +31,11 @@ namespace ContextMenuProfiler.UI.Core
             public const string Static = "Static";
         }
 
+        public static class FilterCategory
+        {
+            public const string All = "All";
+        }
+
         public static class Status
         {
             public const string Unknown = "Unknown";
@@ -85,6 +90,17 @@ namespace ContextMenuProfiler.UI.Core
                 || string.Equals(type, Type.PackagedExtension, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(type, Type.PackagedCom, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(type, Type.UwpPackagedCom, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)
+        {
+            if (string.IsNullOrWhiteSpace(selectedCategory)
+                || string.Equals(selectedCategory, FilterCategory.All, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(selectedCategory, resultCategory, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsFallbackLikeStatus(string? status)

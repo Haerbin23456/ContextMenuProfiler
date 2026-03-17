@@ -40,17 +40,6 @@ namespace ContextMenuProfiler.UI.ViewModels
             File
         }
 
-        private static class CategoryTag
-        {
-            public const string All = "All";
-            public const string File = "File";
-            public const string Folder = "Folder";
-            public const string Background = "Background";
-            public const string Drive = "Drive";
-            public const string Uwp = "UWP";
-            public const string Static = "Static";
-        }
-
         private readonly BenchmarkService _benchmarkService;
         private CancellationTokenSource? _filterCts;
 
@@ -74,7 +63,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _selectedCategory = CategoryTag.All;
+        private string _selectedCategory = BenchmarkSemantics.FilterCategory.All;
 
         [ObservableProperty]
         private int _selectedCategoryIndex = 0;
@@ -149,7 +138,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
 
             // Category Match
-            bool categoryMatch = SelectedCategory == CategoryTag.All || result.Category == SelectedCategory;
+            bool categoryMatch = BenchmarkSemantics.IsCategoryMatch(SelectedCategory, result.Category);
             if (!categoryMatch) return false;
 
             // Search Match
@@ -523,17 +512,37 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             Categories = new ObservableCollection<CategoryItem>
             {
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = CategoryTag.All, Icon = SymbolRegular.TableMultiple20, IsActive = true },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = CategoryTag.File, Icon = SymbolRegular.Document20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = CategoryTag.Folder, Icon = SymbolRegular.Folder20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = CategoryTag.Background, Icon = SymbolRegular.Image20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = CategoryTag.Drive, Icon = SymbolRegular.HardDrive20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = CategoryTag.Uwp, Icon = SymbolRegular.Box20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = CategoryTag.Static, Icon = SymbolRegular.PuzzlePiece20 }
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = BenchmarkSemantics.FilterCategory.All, Icon = SymbolRegular.TableMultiple20, IsActive = true },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = BenchmarkSemantics.Category.File, Icon = SymbolRegular.Document20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = BenchmarkSemantics.Category.Folder, Icon = SymbolRegular.Folder20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = BenchmarkSemantics.Category.Background, Icon = SymbolRegular.Image20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = BenchmarkSemantics.Category.Drive, Icon = SymbolRegular.HardDrive20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = BenchmarkSemantics.Category.Uwp, Icon = SymbolRegular.Box20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = BenchmarkSemantics.Category.Static, Icon = SymbolRegular.PuzzlePiece20 }
             };
             if (SelectedCategoryIndex < 0 || SelectedCategoryIndex >= Categories.Count)
             {
                 SelectedCategoryIndex = 0;
+            }
+        }
+
+        private static void ApplyRegistryExtensionState(BenchmarkResult item, bool shouldEnable)
+        {
+            if (item.RegistryEntries == null || item.RegistryEntries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in item.RegistryEntries)
+            {
+                if (shouldEnable)
+                {
+                    ExtensionManager.EnableRegistryKey(entry.Path);
+                }
+                else
+                {
+                    ExtensionManager.DisableRegistryKey(entry.Path);
+                }
             }
         }
         
@@ -548,40 +557,20 @@ namespace ContextMenuProfiler.UI.ViewModels
                 // When this command is executed (e.g. by Click), the property might already be updated or not.
                 // We rely on the Command execution.
                 
-                bool newState = item.IsEnabled; 
-                
-                if (!newState) // User turned it OFF (IsEnabled is now false)
+                bool shouldEnable = item.IsEnabled;
+
+                if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
                 {
-                    // Logic to Disable
-                    if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
-                    {
-                        ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, true);
-                    }
-                    else if (item.RegistryEntries != null && item.RegistryEntries.Count > 0)
-                    {
-                        foreach (var entry in item.RegistryEntries)
-                        {
-                            ExtensionManager.DisableRegistryKey(entry.Path);
-                        }
-                    }
-                    item.Status = LocalizationService.Instance["Dashboard.Status.DisabledPendingRestart"];
+                    ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, !shouldEnable);
                 }
-                else // User turned it ON (IsEnabled is now true)
+                else
                 {
-                    // Logic to Enable
-                    if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
-                    {
-                        ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, false);
-                    }
-                    else if (item.RegistryEntries != null && item.RegistryEntries.Count > 0)
-                    {
-                        foreach (var entry in item.RegistryEntries)
-                        {
-                            ExtensionManager.EnableRegistryKey(entry.Path);
-                        }
-                    }
-                    item.Status = LocalizationService.Instance["Dashboard.Status.EnabledPendingRestart"];
+                    ApplyRegistryExtensionState(item, shouldEnable);
                 }
+
+                item.Status = shouldEnable
+                    ? LocalizationService.Instance["Dashboard.Status.EnabledPendingRestart"]
+                    : LocalizationService.Instance["Dashboard.Status.DisabledPendingRestart"];
                 
                 UpdateStats();
              }

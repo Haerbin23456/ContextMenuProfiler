@@ -116,6 +116,9 @@ string dashboardViewModelSource = File.ReadAllText(dashboardViewModelPath);
 string statusVisibilityConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
 string statusVisibilityConverterSource = File.ReadAllText(statusVisibilityConverterPath);
 
+string dashboardPageXamlPath = FindFileUpward(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
+string dashboardPageXamlSource = File.ReadAllText(dashboardPageXamlPath);
+
 AssertTrue(
     benchmarkServiceSource.Contains("RunBenchmarkAsync(targetPath)", StringComparison.Ordinal),
     "AnalyzeFileUsesPathSpecificBenchmark"
@@ -141,6 +144,39 @@ AssertSourceDoesNotContainAny(benchmarkServiceSource, "BenchmarkServiceNoStatusM
 AssertSourceDoesNotContainAny(packageScannerSource, "PackageScannerNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 AssertSourceDoesNotContainAny(dashboardViewModelSource, "DashboardViewModelNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 AssertSourceDoesNotContainAny(statusVisibilityConverterSource, "StatusVisibilityConverterNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
+
+AssertTrue(
+    !dashboardViewModelSource.Contains("private static class CategoryTag", StringComparison.Ordinal),
+    "DashboardViewModelNoCategoryTagDuplication"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("BenchmarkSemantics.IsCategoryMatch", StringComparison.Ordinal),
+    "DashboardViewModelUsesCentralizedCategoryMatch"
+);
+
+string[] forbiddenLegacyStatusConverterBindings =
+{
+    "StatusToVisibilityConverter}, ConverterParameter=NotActive",
+    "StatusToVisibilityConverter}, ConverterParameter=Fallback",
+    "StatusToVisibilityConverter}, ConverterParameter=NotUWP",
+    "StatusToVisibilityConverter}, ConverterParameter=Inverse"
+};
+
+foreach (var legacyBinding in forbiddenLegacyStatusConverterBindings)
+{
+    AssertTrue(
+        !dashboardPageXamlSource.Contains(legacyBinding, StringComparison.Ordinal),
+        $"DashboardPageNoLegacyStatusConverterBinding:{legacyBinding}"
+    );
+}
+
+AssertTrue(
+    dashboardPageXamlSource.Contains("StatusVisibilityMode.NotActive", StringComparison.Ordinal)
+    && dashboardPageXamlSource.Contains("StatusVisibilityMode.Fallback", StringComparison.Ordinal)
+    && dashboardPageXamlSource.Contains("StatusVisibilityMode.NotUwp", StringComparison.Ordinal),
+    "DashboardPageUsesTypedStatusVisibilityModes"
+);
 
 Console.WriteLine("Quality checks passed.");
 
