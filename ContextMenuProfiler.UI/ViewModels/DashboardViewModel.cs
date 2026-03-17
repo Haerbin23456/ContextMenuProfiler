@@ -33,6 +33,13 @@ namespace ContextMenuProfiler.UI.ViewModels
 
     public partial class DashboardViewModel : ObservableObject
     {
+        private enum LastScanMode
+        {
+            None,
+            System,
+            File
+        }
+
         private readonly BenchmarkService _benchmarkService;
         private CancellationTokenSource? _filterCts;
 
@@ -194,7 +201,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         [ObservableProperty]
         private string _realLoadTime = LocalizationService.Instance["Dashboard.Value.None"]; // Display string for Real Shell Benchmark
 
-        private string _lastScanMode = "None"; // "System" or "File"
+        private LastScanMode _lastScanMode = LastScanMode.None;
         private string _lastScanPath = "";
         private long _scanOrderCounter = 0;
 
@@ -316,11 +323,11 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand(CanExecute = nameof(CanExecuteBenchmark))]
         private async Task Refresh()
         {
-            if (_lastScanMode == "System")
+            if (_lastScanMode == LastScanMode.System)
             {
                 await ScanSystem();
             }
-            else if (_lastScanMode == "File" && !string.IsNullOrEmpty(_lastScanPath))
+            else if (_lastScanMode == LastScanMode.File && !string.IsNullOrEmpty(_lastScanPath))
             {
                 await ScanFile(_lastScanPath);
             }
@@ -329,7 +336,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand(CanExecute = nameof(CanExecuteBenchmark))]
         private async Task ScanSystem()
         {
-            _lastScanMode = "System";
+            _lastScanMode = LastScanMode.System;
             StatusText = LocalizationService.Instance["Dashboard.Status.ScanningSystem"];
             IsBusy = true;
             RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
@@ -444,7 +451,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
-            _lastScanMode = "File";
+            _lastScanMode = LastScanMode.File;
             _lastScanPath = filePath;
             StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath);
             IsBusy = true;
