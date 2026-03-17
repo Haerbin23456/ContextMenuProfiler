@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ContextMenuProfiler.UI.Core
 {
@@ -45,6 +47,33 @@ namespace ContextMenuProfiler.UI.Core
             public const string EnabledPendingRestart = "Enabled (Pending Restart)";
         }
 
+        public static class StatusToken
+        {
+            public const string Fallback = "Fallback";
+            public const string Error = "Error";
+            public const string Orphaned = "Orphaned";
+            public const string Missing = "Missing";
+            public const string Exception = "Exception";
+            public const string Failed = "Failed";
+            public const string NotRegistered = "Not Registered";
+            public const string Invalid = "Invalid";
+            public const string NotFound = "Not Found";
+            public const string NoMenu = "No Menu";
+            public const string NotMeasured = "Not Measured";
+            public const string Unsupported = "Unsupported";
+        }
+
+        public static class CategoryLocationHint
+        {
+            public const string Background = "Background";
+            public const string Drive = "Drive";
+            public const string Directory = "Directory";
+            public const string Folder = "Folder";
+            public const string AllFiles = "All Files";
+            public const string Extension = "Extension";
+            public const string AllFileSystemObjects = "All File System Objects";
+        }
+
         public static bool IsPackagedExtensionType(string? type)
         {
             if (string.IsNullOrWhiteSpace(type))
@@ -65,10 +94,10 @@ namespace ContextMenuProfiler.UI.Core
                 return false;
             }
 
-            return status.Contains("Fallback", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Error", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Orphaned", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Missing", StringComparison.OrdinalIgnoreCase);
+            return status.Contains(StatusToken.Fallback, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Error, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Orphaned, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Missing, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsWarningLikeStatus(string? status)
@@ -79,15 +108,39 @@ namespace ContextMenuProfiler.UI.Core
             }
 
             return status.StartsWith(Status.LoadError, StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Exception", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Failed", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Not Registered", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Invalid", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Not Found", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Fallback", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("No Menu", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Orphaned", StringComparison.OrdinalIgnoreCase)
-                || status.Contains("Missing", StringComparison.OrdinalIgnoreCase);
+                || status.Contains(StatusToken.Exception, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Failed, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.NotRegistered, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Invalid, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.NotFound, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Fallback, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.NoMenu, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Orphaned, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Missing, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsNotMeasuredLikeStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return false;
+            }
+
+            return status.Contains(StatusToken.NotMeasured, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.Unsupported, StringComparison.OrdinalIgnoreCase)
+                || status.Contains(StatusToken.NoMenu, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveCategoryFromLocations(IEnumerable<string> locations)
+        {
+            var locs = locations?.ToList() ?? new List<string>();
+
+            if (locs.Any(l => l.Contains(CategoryLocationHint.Background, StringComparison.OrdinalIgnoreCase))) return Category.Background;
+            if (locs.Any(l => l.Contains(CategoryLocationHint.Drive, StringComparison.OrdinalIgnoreCase))) return Category.Drive;
+            if (locs.Any(l => l.Contains(CategoryLocationHint.Directory, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.Folder, StringComparison.OrdinalIgnoreCase))) return Category.Folder;
+            if (locs.Any(l => l.Contains(CategoryLocationHint.AllFiles, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.Extension, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.AllFileSystemObjects, StringComparison.OrdinalIgnoreCase))) return Category.File;
+
+            return Category.File;
         }
     }
 }

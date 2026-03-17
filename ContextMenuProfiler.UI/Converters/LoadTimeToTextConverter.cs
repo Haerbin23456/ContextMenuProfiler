@@ -33,10 +33,8 @@ namespace ContextMenuProfiler.UI.Converters
 
             if (string.IsNullOrWhiteSpace(status)) return true;
 
-            return BenchmarkSemantics.IsFallbackLikeStatus(status) ||
-                     status.Contains("Not Measured", StringComparison.OrdinalIgnoreCase) ||
-                     status.Contains("Unsupported", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("No Menu", StringComparison.OrdinalIgnoreCase);
+            return BenchmarkSemantics.IsFallbackLikeStatus(status)
+                || BenchmarkSemantics.IsNotMeasuredLikeStatus(status);
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)

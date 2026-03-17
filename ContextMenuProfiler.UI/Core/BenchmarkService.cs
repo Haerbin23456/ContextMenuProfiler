@@ -512,13 +512,7 @@ namespace ContextMenuProfiler.UI.Core
 
         private string DetermineCategory(IEnumerable<string> locations)
         {
-            var locs = locations.ToList();
-            if (locs.Any(l => l.Contains("Background"))) return BenchmarkSemantics.Category.Background;
-            if (locs.Any(l => l.Contains("Drive"))) return BenchmarkSemantics.Category.Drive;
-            if (locs.Any(l => l.Contains("Directory") || l.Contains("Folder"))) return BenchmarkSemantics.Category.Folder;
-            if (locs.Any(l => l.Contains("All Files") || l.Contains("Extension") || l.Contains("All File System Objects"))) return BenchmarkSemantics.Category.File;
-            
-            return BenchmarkSemantics.Category.File; // Default
+            return BenchmarkSemantics.ResolveCategoryFromLocations(locations);
         }
     }
 }
