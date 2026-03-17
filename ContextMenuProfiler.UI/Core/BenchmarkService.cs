@@ -69,119 +69,142 @@ namespace ContextMenuProfiler.UI.Core
 
         public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode = ScanMode.Targeted)
         {
-            // Use Task.Run to avoid deadlocks on UI thread when waiting for async tasks
             return Task.Run(() => RunSystemBenchmarkAsync(mode)).GetAwaiter().GetResult();
         }
 
         public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode = ScanMode.Targeted, IProgress<BenchmarkResult>? progress = null)
         {
+            bool useFolderContext = mode == ScanMode.Full ? false : false;
+            using var fileContext = ShellTestContext.Create(useFolderContext);
+            var registryHandlers = RegistryScanner.ScanHandlers(mode);
+            var staticVerbs = RegistryScanner.ScanStaticVerbs();
+            return await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, null, fileContext.Path, progress);
+        }
+
+        public List<BenchmarkResult> RunBenchmark(string targetPath)
+        {
+            return Task.Run(() => RunBenchmarkAsync(targetPath)).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<BenchmarkResult>> RunBenchmarkAsync(string targetPath, IProgress<BenchmarkResult>? progress = null)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return await RunSystemBenchmarkAsync(ScanMode.Targeted, progress);
+            }
+
+            var registryHandlers = RegistryScanner.ScanHandlersForPath(targetPath);
+            var staticVerbs = RegistryScanner.ScanStaticVerbsForPath(targetPath);
+            return await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, targetPath, targetPath, progress);
+        }
+
+        private async Task<List<BenchmarkResult>> RunBenchmarkCoreAsync(
+            Dictionary<Guid, List<RegistryHandlerInfo>> registryHandlers,
+            Dictionary<string, List<string>> staticVerbs,
+            string? packageTargetPath,
+            string hookContextPath,
+            IProgress<BenchmarkResult>? progress)
+        {
             var allResults = new ConcurrentBag<BenchmarkResult>();
             var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
             var semaphore = new SemaphoreSlim(8);
-            
-            using (var fileContext = ShellTestContext.Create(false))
+
+            var comTasks = registryHandlers.Select(async clsidEntry =>
             {
-                // 1. Scan All Registry Handlers (COM)
-                var registryHandlers = RegistryScanner.ScanHandlers(mode);
-                var comTasks = registryHandlers.Select(async clsidEntry =>
+                await semaphore.WaitAsync();
+                try
+                {
+                    var clsid = clsidEntry.Key;
+                    var handlerInfos = clsidEntry.Value;
+
+                    if (resultsMap.ContainsKey(clsid)) return;
+                    var meta = QueryClsidMetadata(clsid);
+                    var result = new BenchmarkResult
+                    {
+                        Clsid = clsid,
+                        Type = "COM",
+                        RegistryEntries = handlerInfos.ToList(),
+                        Name = meta.Name,
+                        BinaryPath = meta.BinaryPath,
+                        ThreadingModel = meta.ThreadingModel,
+                        FriendlyName = meta.FriendlyName
+                    };
+
+                    if (string.IsNullOrEmpty(result.Name)) result.Name = $"Unknown ({clsid})";
+
+                    resultsMap[clsid] = result;
+                    result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
+
+                    await EnrichBenchmarkResultAsync(result, hookContextPath);
+
+                    bool isBlocked = ExtensionManager.IsExtensionBlocked(clsid);
+                    bool hasDisabledPath = result.RegistryEntries.Any(e => e.Location.Contains("[Disabled]"));
+                    result.IsEnabled = !isBlocked && !hasDisabledPath;
+                    result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
+
+                    allResults.Add(result);
+                    progress?.Report(result);
+                }
+                finally { semaphore.Release(); }
+            });
+
+            await Task.WhenAll(comTasks);
+
+            foreach (var verbEntry in staticVerbs)
+            {
+                string key = verbEntry.Key;
+                var paths = verbEntry.Value;
+                string name = key.Split('|')[0];
+                string command = key.Split('|')[1];
+
+                var verbResult = new BenchmarkResult
+                {
+                    Name = name,
+                    Type = "Static",
+                    Status = "Static (Not Measured)",
+                    BinaryPath = ExtractExecutablePath(command),
+                    RegistryEntries = paths.Select(p => new RegistryHandlerInfo
+                    {
+                        Path = p,
+                        Location = $"Registry (Shell) - {p.Split('\\')[0]}"
+                    }).ToList(),
+                    InterfaceType = "Static Verb",
+                    DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
+                    TotalTime = 0,
+                    Category = "Static"
+                };
+
+                bool anyDisabled = paths.Any(p => p.Split('\\').Last().StartsWith("-"));
+                verbResult.IsEnabled = !anyDisabled;
+                verbResult.LocationSummary = string.Join(", ", verbResult.RegistryEntries.Select(e => e.Location).Distinct());
+                verbResult.IconLocation = ResolveStaticVerbIcon(paths.First(), verbResult.BinaryPath);
+
+                allResults.Add(verbResult);
+                progress?.Report(verbResult);
+            }
+
+            var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
+                .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
+                .Select(async uwpResult =>
                 {
                     await semaphore.WaitAsync();
                     try
                     {
-                        var clsid = clsidEntry.Key;
-                        var handlerInfos = clsidEntry.Value;
-                        
-                        if (resultsMap.ContainsKey(clsid)) return;
-                        var meta = QueryClsidMetadata(clsid);
-                        var result = new BenchmarkResult
-                        {
-                            Clsid = clsid,
-                            Type = "COM",
-                            RegistryEntries = handlerInfos.ToList(),
-                            Name = meta.Name,
-                            BinaryPath = meta.BinaryPath,
-                            ThreadingModel = meta.ThreadingModel,
-                            FriendlyName = meta.FriendlyName
-                        };
+                        uwpResult.Category = "UWP";
+                        await EnrichBenchmarkResultAsync(uwpResult, hookContextPath);
 
-                        if (string.IsNullOrEmpty(result.Name)) result.Name = $"Unknown ({clsid})";
-                        
-                        resultsMap[clsid] = result;
-                        result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
+                        uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
+                        uwpResult.LocationSummary = "Modern Shell (UWP)";
 
-                        await EnrichBenchmarkResultAsync(result, fileContext.Path);
-
-                        bool isBlocked = ExtensionManager.IsExtensionBlocked(clsid);
-                        bool hasDisabledPath = result.RegistryEntries.Any(e => e.Location.Contains("[Disabled]"));
-                        result.IsEnabled = !isBlocked && !hasDisabledPath;
-                        result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
-
-                        allResults.Add(result);
-                        progress?.Report(result);
+                        allResults.Add(uwpResult);
+                        progress?.Report(uwpResult);
                     }
                     finally { semaphore.Release(); }
                 });
 
-                await Task.WhenAll(comTasks);
+            await Task.WhenAll(uwpTasks);
 
-                // 2. Scan Static Verbs
-                var staticVerbs = RegistryScanner.ScanStaticVerbs();
-                foreach (var verbEntry in staticVerbs)
-                {
-                    string key = verbEntry.Key;
-                    var paths = verbEntry.Value;
-                    string name = key.Split('|')[0];
-                    string command = key.Split('|')[1];
-
-                    var verbResult = new BenchmarkResult
-                    {
-                        Name = name,
-                        Type = "Static",
-                        Status = "Static (Not Measured)",
-                        BinaryPath = ExtractExecutablePath(command),
-                        RegistryEntries = paths.Select(p => new RegistryHandlerInfo { 
-                            Path = p, 
-                            Location = $"Registry (Shell) - {p.Split('\\')[0]}" 
-                        }).ToList(),
-                        InterfaceType = "Static Verb",
-                        DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
-                        TotalTime = 0,
-                        Category = "Static"
-                    };
-
-                    bool anyDisabled = paths.Any(p => p.Split('\\').Last().StartsWith("-"));
-                    verbResult.IsEnabled = !anyDisabled;
-                    verbResult.LocationSummary = string.Join(", ", verbResult.RegistryEntries.Select(e => e.Location).Distinct());
-                    verbResult.IconLocation = ResolveStaticVerbIcon(paths.First(), verbResult.BinaryPath);
-
-                    allResults.Add(verbResult);
-                    progress?.Report(verbResult);
-                }
-
-                // 3. Scan UWP Extensions (Parallelized)
-                var uwpTasks = PackageScanner.ScanPackagedExtensions(null)
-                    .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
-                    .Select(async uwpResult => 
-                    {
-                        await semaphore.WaitAsync();
-                        try 
-                        {
-                            uwpResult.Category = "UWP";
-                            await EnrichBenchmarkResultAsync(uwpResult, fileContext.Path);
-                            
-                            uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
-                            uwpResult.LocationSummary = "Modern Shell (UWP)";
-                            
-                            allResults.Add(uwpResult);
-                            progress?.Report(uwpResult);
-                        }
-                        finally { semaphore.Release(); }
-                    });
-
-                await Task.WhenAll(uwpTasks);
-
-                return allResults.ToList();
-            }
+            return allResults.ToList();
         }
 
         private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath)
@@ -484,11 +507,6 @@ namespace ContextMenuProfiler.UI.Core
                 LogService.Instance.Error($"ResolvePackageDllPath failed for {packageFullName}", ex);
                 return null;
             }
-        }
-
-        public List<BenchmarkResult> RunBenchmark(string targetPath)
-        {
-            return RunSystemBenchmark(ScanMode.Targeted); // Simplified for now
         }
 
         public long RunRealShellBenchmark(string? filePath = null) => -1;

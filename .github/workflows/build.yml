@@ -25,6 +25,9 @@ jobs:
     - name: Build Solution
       run: dotnet build ContextMenuProfiler.sln -c Release
 
+    - name: Run Quality Checks
+      run: dotnet run --project ContextMenuProfiler.QualityChecks\ContextMenuProfiler.QualityChecks.csproj -c Release --no-build
+
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:

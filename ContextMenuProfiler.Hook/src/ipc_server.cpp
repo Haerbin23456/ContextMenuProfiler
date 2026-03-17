@@ -5,6 +5,7 @@
 static const LONG kMaxConcurrentPipeClients = 4;
 static volatile LONG g_ActivePipeClients = 0;
 static const DWORD kWorkerTimeoutMs = 1800;
+static const size_t kMaxRequestBytes = 16384;
 
 struct IpcWorkItem {
     char request[2048];
@@ -27,11 +28,24 @@ void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
 
     std::string mode = "AUTO";
     std::string clsidStr, pathStr, dllHintStr;
+    bool v1Protocol = false;
 
-    if (reqStr.substr(0, 4) == "COM|") {
+    if (reqStr.rfind("CMP1|", 0) == 0) {
+        v1Protocol = true;
+        reqStr = reqStr.substr(5);
+        size_t sep0 = reqStr.find('|');
+        if (sep0 == std::string::npos) {
+            snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_FORMAT\",\"error\":\"Missing Mode\"}");
+            return;
+        }
+        mode = reqStr.substr(0, sep0);
+        reqStr = reqStr.substr(sep0 + 1);
+    }
+
+    if (!v1Protocol && reqStr.substr(0, 4) == "COM|") {
         mode = "COM";
         reqStr = reqStr.substr(4);
-    } else if (reqStr.substr(0, 5) == "ECMD|") {
+    } else if (!v1Protocol && reqStr.substr(0, 5) == "ECMD|") {
         mode = "ECMD";
         reqStr = reqStr.substr(5);
     }
@@ -39,7 +53,7 @@ void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
     // Format: CLSID|Path[|DllHint]
     size_t sep1 = reqStr.find('|');
     if (sep1 == std::string::npos) {
-        snprintf(response, maxLen, "{\"success\":false,\"error\":\"Format Error\"}");
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_FORMAT\",\"error\":\"Format Error\"}");
         return;
     }
     clsidStr = reqStr.substr(0, sep1);
@@ -55,18 +69,27 @@ void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
 
     CLSID clsid;
     wchar_t wClsid[64];
-    MultiByteToWideChar(CP_UTF8, 0, clsidStr.c_str(), -1, wClsid, 64);
+    if (MultiByteToWideChar(CP_UTF8, 0, clsidStr.c_str(), -1, wClsid, 64) <= 0) {
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_CLSID_UTF8\",\"error\":\"Bad CLSID Encoding\"}");
+        return;
+    }
     if (FAILED(CLSIDFromString(wClsid, &clsid))) {
-        snprintf(response, maxLen, "{\"success\":false,\"error\":\"Bad CLSID\"}");
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_CLSID\",\"error\":\"Bad CLSID\"}");
         return;
     }
 
     wchar_t wPath[MAX_PATH];
-    MultiByteToWideChar(CP_UTF8, 0, pathStr.c_str(), -1, wPath, MAX_PATH);
+    if (MultiByteToWideChar(CP_UTF8, 0, pathStr.c_str(), -1, wPath, MAX_PATH) <= 0) {
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_PATH_UTF8\",\"error\":\"Bad Path Encoding\"}");
+        return;
+    }
 
     wchar_t wDllHint[MAX_PATH] = { 0 };
     if (!dllHintStr.empty()) {
-        MultiByteToWideChar(CP_UTF8, 0, dllHintStr.c_str(), -1, wDllHint, MAX_PATH);
+        if (MultiByteToWideChar(CP_UTF8, 0, dllHintStr.c_str(), -1, wDllHint, MAX_PATH) <= 0) {
+            snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_DLLHINT_UTF8\",\"error\":\"Bad DllHint Encoding\"}");
+            return;
+        }
     }
 
     // We'll pass the dllHint to the handlers
@@ -110,14 +133,46 @@ DWORD WINAPI HandlePipeClientThread(LPVOID param) {
     HANDLE hPipe = (HANDLE)param;
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
-    char req[2048];
+    std::string req;
+    req.reserve(2048);
     DWORD read = 0;
     DWORD written = 0;
 
-    if (ReadFile(hPipe, req, 2047, &read, NULL) && read > 0) {
-        req[read] = '\0';
+    while (true) {
+        char chunk[2048];
+        BOOL ok = ReadFile(hPipe, chunk, sizeof(chunk), &read, NULL);
+        if (ok && read > 0) {
+            req.append(chunk, read);
+            if (req.size() > kMaxRequestBytes) {
+                const char* errRes = "{\"success\":false,\"code\":\"E_REQ_TOO_LARGE\",\"error\":\"Request Too Large\"}";
+                WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
+                FlushFileBuffers(hPipe);
+                req.clear();
+                break;
+            }
+            break;
+        }
+        DWORD err = GetLastError();
+        if (!ok && err == ERROR_MORE_DATA) {
+            if (read > 0) {
+                req.append(chunk, read);
+            }
+            if (req.size() > kMaxRequestBytes) {
+                const char* errRes = "{\"success\":false,\"code\":\"E_REQ_TOO_LARGE\",\"error\":\"Request Too Large\"}";
+                WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
+                FlushFileBuffers(hPipe);
+                req.clear();
+                break;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!req.empty()) {
+        req.push_back('\0');
         IpcWorkItem* workItem = new IpcWorkItem();
-        strncpy_s(workItem->request, sizeof(workItem->request), req, _TRUNCATE);
+        strncpy_s(workItem->request, sizeof(workItem->request), req.c_str(), _TRUNCATE);
         workItem->response[0] = '\0';
         workItem->maxLen = 65535;
         workItem->releaseByWorker = 0;
@@ -169,7 +224,7 @@ DWORD WINAPI PipeThread(LPVOID) {
         HANDLE hPipe = CreateNamedPipeA(
             "\\\\.\\pipe\\ContextMenuProfilerHook",
             PIPE_ACCESS_DUPLEX,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
             PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, &sa);
         if (hPipe == INVALID_HANDLE_VALUE) { Sleep(100); continue; }
         

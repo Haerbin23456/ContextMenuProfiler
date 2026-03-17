@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 
@@ -81,6 +82,43 @@ namespace ContextMenuProfiler.UI.Core
             }
 
             // Convert back to regular Dictionary
+            return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
+        }
+
+        public static Dictionary<Guid, List<RegistryHandlerInfo>> ScanHandlersForPath(string targetPath)
+        {
+            var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
+            bool isDirectory = Directory.Exists(targetPath);
+            string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
+
+            ScanLocation(handlers, @"*\shellex\ContextMenuHandlers", "All Files (*)");
+            ScanLocation(handlers, @"*\shellex\-ContextMenuHandlers", "All Files (*) [Disabled]");
+
+            if (isDirectory)
+            {
+                ScanLocation(handlers, @"Directory\shellex\ContextMenuHandlers", "Directory");
+                ScanLocation(handlers, @"Directory\shellex\-ContextMenuHandlers", "Directory [Disabled]");
+                ScanLocation(handlers, @"Folder\shellex\ContextMenuHandlers", "Folder");
+                ScanLocation(handlers, @"Drive\shellex\ContextMenuHandlers", "Drive");
+                ScanLocation(handlers, @"AllFileSystemObjects\shellex\ContextMenuHandlers", "All File System Objects");
+                ScanLocation(handlers, @"Directory\Background\shellex\ContextMenuHandlers", "Directory Background");
+                ScanLocation(handlers, @"DesktopBackground\shellex\ContextMenuHandlers", "Desktop Background");
+                return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
+            }
+
+            if (!string.IsNullOrEmpty(ext))
+            {
+                ScanLocation(handlers, $@"SystemFileAssociations\{ext}\shellex\ContextMenuHandlers", $"Extension ({ext})");
+                ScanLocation(handlers, $@"SystemFileAssociations\{ext}\shellex\-ContextMenuHandlers", $"Extension ({ext}) [Disabled]");
+
+                string? progId = GetProgID(ext);
+                if (!string.IsNullOrEmpty(progId))
+                {
+                    ScanLocation(handlers, $@"{progId}\shellex\ContextMenuHandlers", $"ProgID ({progId} for {ext})");
+                    ScanLocation(handlers, $@"{progId}\shellex\-ContextMenuHandlers", $"ProgID ({progId} for {ext}) [Disabled]");
+                }
+            }
+
             return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
         }
 
@@ -179,6 +217,36 @@ namespace ContextMenuProfiler.UI.Core
             foreach (var loc in shellLocations)
             {
                 ScanShellKey(verbs, loc.Item1, loc.Item2);
+            }
+
+            return new Dictionary<string, List<string>>(verbs);
+        }
+
+        public static Dictionary<string, List<string>> ScanStaticVerbsForPath(string targetPath)
+        {
+            var verbs = new ConcurrentDictionary<string, List<string>>();
+            bool isDirectory = Directory.Exists(targetPath);
+            string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
+
+            ScanShellKey(verbs, @"*\shell", "All Files (*)");
+
+            if (isDirectory)
+            {
+                ScanShellKey(verbs, @"Directory\shell", "Directory");
+                ScanShellKey(verbs, @"Directory\Background\shell", "Directory Background");
+                ScanShellKey(verbs, @"Drive\shell", "Drive");
+                ScanShellKey(verbs, @"Folder\shell", "Folder");
+                return new Dictionary<string, List<string>>(verbs);
+            }
+
+            if (!string.IsNullOrEmpty(ext))
+            {
+                ScanShellKey(verbs, $@"SystemFileAssociations\{ext}\shell", $"Extension ({ext})");
+                string? progId = GetProgID(ext);
+                if (!string.IsNullOrEmpty(progId))
+                {
+                    ScanShellKey(verbs, $@"{progId}\shell", $"ProgID ({progId} for {ext})");
+                }
             }
 
             return new Dictionary<string, List<string>>(verbs);
