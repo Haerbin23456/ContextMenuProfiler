@@ -74,8 +74,7 @@ namespace ContextMenuProfiler.UI.Core
 
         public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode = ScanMode.Targeted, IProgress<BenchmarkResult>? progress = null)
         {
-            bool useFolderContext = mode == ScanMode.Full ? false : false;
-            using var fileContext = ShellTestContext.Create(useFolderContext);
+            using var fileContext = ShellTestContext.Create(false);
             var registryHandlers = RegistryScanner.ScanHandlers(mode);
             var staticVerbs = RegistryScanner.ScanStaticVerbs();
             return await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, null, fileContext.Path, progress);

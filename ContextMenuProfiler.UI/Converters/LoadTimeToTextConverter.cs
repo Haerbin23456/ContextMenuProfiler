@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
+using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Converters
 {
@@ -8,7 +9,8 @@ namespace ContextMenuProfiler.UI.Converters
     {
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            if (values.Length < 2) return "N/A";
+            string noneText = LocalizationService.Instance["Dashboard.Value.None"];
+            if (values.Length < 2) return noneText;
 
             long ms = 0;
             if (values[0] is long l) ms = l;
@@ -18,7 +20,7 @@ namespace ContextMenuProfiler.UI.Converters
 
             if (ShouldShowNa(status, ms))
             {
-                return "N/A";
+                return noneText;
             }
 
             return $"{ms} ms";

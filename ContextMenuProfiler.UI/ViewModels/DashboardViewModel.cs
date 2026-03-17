@@ -192,7 +192,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _realLoadTime = "N/A"; // Display string for Real Shell Benchmark
+        private string _realLoadTime = LocalizationService.Instance["Dashboard.Value.None"]; // Display string for Real Shell Benchmark
 
         private string _lastScanMode = "None"; // "System" or "File"
         private string _lastScanPath = "";
@@ -259,36 +259,42 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand]
         private async Task ReconnectHook()
         {
-            StatusText = "Reconnecting Hook...";
+            StatusText = LocalizationService.Instance["Dashboard.Status.ReconnectingHook"];
             IsBusy = true;
             try
             {
                 bool injectOk = await HookService.Instance.InjectAsync();
                 if (!injectOk)
                 {
-                    NotificationService.Instance.ShowError("Inject Failed", "Injector or Hook DLL not found, or elevation was denied.");
+                    NotificationService.Instance.ShowError(
+                        LocalizationService.Instance["Dashboard.Notify.InjectFailed.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.InjectFailed.Message"]);
                     return;
                 }
                 await Task.Delay(1000); // Give it a second
                 await HookService.Instance.GetStatusAsync();
                 if (CurrentHookStatus == HookStatus.Active)
                 {
-                    NotificationService.Instance.ShowSuccess("Connected", "Hook service is now active.");
+                    NotificationService.Instance.ShowSuccess(
+                        LocalizationService.Instance["Dashboard.Notify.HookConnected.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.HookConnected.Message"]);
                 }
                 else
                 {
-                    NotificationService.Instance.ShowWarning("Partial Success", "DLL injected, but pipe not responding yet.");
+                    NotificationService.Instance.ShowWarning(
+                        LocalizationService.Instance["Dashboard.Notify.HookPartial.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.HookPartial.Message"]);
                 }
             }
             catch (Exception ex)
             {
                 LogService.Instance.Error("Reconnect Failed", ex);
-                NotificationService.Instance.ShowError("Reconnect Failed", ex.Message);
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ReconnectFailed.Title"], ex.Message);
             }
             finally
             {
                 IsBusy = false;
-                StatusText = "Ready";
+                StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
             }
         }
 
@@ -297,7 +303,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             var status = await HookService.Instance.GetStatusAsync();
             if (status == HookStatus.Disconnected)
             {
-                StatusText = "Initializing Hook Service...";
+                StatusText = LocalizationService.Instance["Dashboard.Status.InitializingHook"];
                 await HookService.Instance.InjectAsync();
             }
         }
@@ -708,7 +714,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             long realLoadMs = Results
                 .Where(r => r.IsEnabled)
                 .Sum(r => r.WallClockTime > 0 ? r.WallClockTime : Math.Max(0, r.TotalTime));
-            RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : "N/A";
+            RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : LocalizationService.Instance["Dashboard.Value.None"];
         }
     }
 }
