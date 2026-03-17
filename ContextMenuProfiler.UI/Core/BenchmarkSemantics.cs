@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace ContextMenuProfiler.UI.Core
 {
@@ -176,12 +175,60 @@ namespace ContextMenuProfiler.UI.Core
 
         public static string ResolveCategoryFromLocations(IEnumerable<string> locations)
         {
-            var locs = locations?.ToList() ?? new List<string>();
+            if (locations == null)
+            {
+                return Category.File;
+            }
 
-            if (locs.Any(l => l.Contains(CategoryLocationHint.Background, StringComparison.OrdinalIgnoreCase))) return Category.Background;
-            if (locs.Any(l => l.Contains(CategoryLocationHint.Drive, StringComparison.OrdinalIgnoreCase))) return Category.Drive;
-            if (locs.Any(l => l.Contains(CategoryLocationHint.Directory, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.Folder, StringComparison.OrdinalIgnoreCase))) return Category.Folder;
-            if (locs.Any(l => l.Contains(CategoryLocationHint.AllFiles, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.Extension, StringComparison.OrdinalIgnoreCase) || l.Contains(CategoryLocationHint.AllFileSystemObjects, StringComparison.OrdinalIgnoreCase))) return Category.File;
+            bool hasDrive = false;
+            bool hasFolder = false;
+            bool hasFile = false;
+
+            foreach (var location in locations)
+            {
+                if (string.IsNullOrWhiteSpace(location))
+                {
+                    continue;
+                }
+
+                if (location.Contains(CategoryLocationHint.Background, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Category.Background;
+                }
+
+                if (location.Contains(CategoryLocationHint.Drive, StringComparison.OrdinalIgnoreCase))
+                {
+                    hasDrive = true;
+                }
+
+                if (location.Contains(CategoryLocationHint.Directory, StringComparison.OrdinalIgnoreCase)
+                    || location.Contains(CategoryLocationHint.Folder, StringComparison.OrdinalIgnoreCase))
+                {
+                    hasFolder = true;
+                }
+
+                if (location.Contains(CategoryLocationHint.AllFiles, StringComparison.OrdinalIgnoreCase)
+                    || location.Contains(CategoryLocationHint.Extension, StringComparison.OrdinalIgnoreCase)
+                    || location.Contains(CategoryLocationHint.AllFileSystemObjects, StringComparison.OrdinalIgnoreCase))
+                {
+                    hasFile = true;
+                }
+            }
+
+            if (hasDrive)
+            {
+                return Category.Drive;
+            }
+
+            if (hasFolder)
+            {
+                return Category.Folder;
+            }
+
+            if (hasFile)
+            {
+                return Category.File;
+            }
 
             return Category.File;
         }

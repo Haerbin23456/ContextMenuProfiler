@@ -60,6 +60,36 @@ AssertNull(malformed, "ExtractJsonMalformed");
 string? wrapped = HookIpcClient.ExtractJsonEnvelope("noise{\"success\":true,\"state\":1}tail");
 AssertEqual("{\"success\":true,\"state\":1}", wrapped ?? "", "ExtractJsonWrapped");
 
+AssertEqual(
+    BenchmarkSemantics.Category.Background,
+    BenchmarkSemantics.ResolveCategoryFromLocations(new[] { "Directory", "Background" }),
+    "ResolveCategoryBackgroundPriority"
+);
+
+AssertEqual(
+    BenchmarkSemantics.Category.Drive,
+    BenchmarkSemantics.ResolveCategoryFromLocations(new[] { "Drive", "Directory" }),
+    "ResolveCategoryDrivePriority"
+);
+
+AssertEqual(
+    BenchmarkSemantics.Category.Folder,
+    BenchmarkSemantics.ResolveCategoryFromLocations(new[] { "Directory" }),
+    "ResolveCategoryFolderHint"
+);
+
+AssertEqual(
+    BenchmarkSemantics.Category.File,
+    BenchmarkSemantics.ResolveCategoryFromLocations(new[] { "All Files" }),
+    "ResolveCategoryFileHint"
+);
+
+AssertEqual(
+    BenchmarkSemantics.Category.File,
+    BenchmarkSemantics.ResolveCategoryFromLocations(Array.Empty<string>()),
+    "ResolveCategoryDefault"
+);
+
 const BindingFlags instanceNonPublic = BindingFlags.Instance | BindingFlags.NonPublic;
 var resourcesField = typeof(LocalizationService).GetField("_resources", instanceNonPublic);
 AssertTrue(resourcesField != null, "LocalizationResourcesFieldExists");
