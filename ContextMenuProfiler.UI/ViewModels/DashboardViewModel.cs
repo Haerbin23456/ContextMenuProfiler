@@ -40,6 +40,17 @@ namespace ContextMenuProfiler.UI.ViewModels
             File
         }
 
+        private static class CategoryTag
+        {
+            public const string All = "All";
+            public const string File = "File";
+            public const string Folder = "Folder";
+            public const string Background = "Background";
+            public const string Drive = "Drive";
+            public const string Uwp = "UWP";
+            public const string Static = "Static";
+        }
+
         private readonly BenchmarkService _benchmarkService;
         private CancellationTokenSource? _filterCts;
 
@@ -63,7 +74,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _selectedCategory = "All";
+        private string _selectedCategory = CategoryTag.All;
 
         [ObservableProperty]
         private int _selectedCategoryIndex = 0;
@@ -138,7 +149,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
 
             // Category Match
-            bool categoryMatch = SelectedCategory == "All" || result.Category == SelectedCategory;
+            bool categoryMatch = SelectedCategory == CategoryTag.All || result.Category == SelectedCategory;
             if (!categoryMatch) return false;
 
             // Search Match
@@ -512,13 +523,13 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             Categories = new ObservableCollection<CategoryItem>
             {
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = "All", Icon = SymbolRegular.TableMultiple20, IsActive = true },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = "File", Icon = SymbolRegular.Document20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = "Folder", Icon = SymbolRegular.Folder20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = "Background", Icon = SymbolRegular.Image20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = "Drive", Icon = SymbolRegular.HardDrive20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = "UWP", Icon = SymbolRegular.Box20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = "Static", Icon = SymbolRegular.PuzzlePiece20 }
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = CategoryTag.All, Icon = SymbolRegular.TableMultiple20, IsActive = true },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = CategoryTag.File, Icon = SymbolRegular.Document20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = CategoryTag.Folder, Icon = SymbolRegular.Folder20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = CategoryTag.Background, Icon = SymbolRegular.Image20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = CategoryTag.Drive, Icon = SymbolRegular.HardDrive20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = CategoryTag.Uwp, Icon = SymbolRegular.Box20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = CategoryTag.Static, Icon = SymbolRegular.PuzzlePiece20 }
             };
             if (SelectedCategoryIndex < 0 || SelectedCategoryIndex >= Categories.Count)
             {
