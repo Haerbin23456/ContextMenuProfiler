@@ -553,7 +553,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 if (!newState) // User turned it OFF (IsEnabled is now false)
                 {
                     // Logic to Disable
-                    if ((item.Type == "UWP" || item.Type == "Packaged Extension" || item.Type == "Packaged COM") && item.Clsid.HasValue)
+                    if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
                     {
                         ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, true);
                     }
@@ -569,7 +569,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 else // User turned it ON (IsEnabled is now true)
                 {
                     // Logic to Enable
-                    if ((item.Type == "UWP" || item.Type == "Packaged Extension" || item.Type == "Packaged COM") && item.Clsid.HasValue)
+                    if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
                     {
                         ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, false);
                     }
@@ -599,7 +599,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (item == null) return;
             
-            if (item.Type == "UWP")
+            if (string.Equals(item.Type, BenchmarkSemantics.Type.Uwp, StringComparison.OrdinalIgnoreCase))
             {
                 NotificationService.Instance.ShowWarning(
                     LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Title"],

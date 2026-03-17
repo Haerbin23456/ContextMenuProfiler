@@ -121,8 +121,8 @@ namespace ContextMenuProfiler.UI.Core
             {
                 Name = name,
                 Clsid = clsid,
-                Status = "OK",
-                Type = "UWP",
+                Status = BenchmarkSemantics.Status.Ok,
+                Type = BenchmarkSemantics.Type.Uwp,
                 Path = package.Id.FullName,
                 BinaryPath = binaryPath,
                 // 简洁且必要：将 DLL 路径作为 Hint 传给 Converter，这是已知事实，不是猜测

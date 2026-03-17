@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
+using ContextMenuProfiler.UI.Core;
 using Wpf.Ui.Controls;
 
 namespace ContextMenuProfiler.UI.Converters
@@ -11,9 +12,9 @@ namespace ContextMenuProfiler.UI.Converters
         {
             if (value is string type)
             {
-                if (type == "UWP") return SymbolRegular.AppGeneric24;
-                if (type == "COM") return SymbolRegular.PuzzlePiece24; // Default generic icon
-                if (type == "Static") return SymbolRegular.WindowConsole20;
+                if (string.Equals(type, BenchmarkSemantics.Type.Uwp, StringComparison.OrdinalIgnoreCase)) return SymbolRegular.AppGeneric24;
+                if (string.Equals(type, BenchmarkSemantics.Type.Com, StringComparison.OrdinalIgnoreCase)) return SymbolRegular.PuzzlePiece24; // Default generic icon
+                if (string.Equals(type, BenchmarkSemantics.Type.Static, StringComparison.OrdinalIgnoreCase)) return SymbolRegular.WindowConsole20;
             }
             return SymbolRegular.PuzzlePiece24; // Default fallback
         }

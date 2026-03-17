@@ -17,8 +17,8 @@ namespace ContextMenuProfiler.UI.Core
     {
         public string Name { get; set; } = "";
         public Guid? Clsid { get; set; }
-        public string Status { get; set; } = "Unknown";
-        public string Type { get; set; } = "COM"; // Legacy COM, UWP, Static
+        public string Status { get; set; } = BenchmarkSemantics.Status.Unknown;
+        public string Type { get; set; } = BenchmarkSemantics.Type.Com; // Legacy COM, UWP, Static
         public string? Path { get; set; }
         public List<RegistryHandlerInfo> RegistryEntries { get; set; } = new List<RegistryHandlerInfo>();
         public long TotalTime { get; set; }
@@ -43,7 +43,7 @@ namespace ContextMenuProfiler.UI.Core
         public string? FriendlyName { get; set; }
         public string? IconSource { get; set; }
         public string? LocationSummary { get; set; }
-        public string Category { get; set; } = "File";
+        public string Category { get; set; } = BenchmarkSemantics.Category.File;
     }
 
     internal class ClsidMetadata
@@ -121,7 +121,7 @@ namespace ContextMenuProfiler.UI.Core
                     var result = new BenchmarkResult
                     {
                         Clsid = clsid,
-                        Type = "COM",
+                        Type = BenchmarkSemantics.Type.Com,
                         RegistryEntries = handlerInfos.ToList(),
                         Name = meta.Name,
                         BinaryPath = meta.BinaryPath,
@@ -159,8 +159,8 @@ namespace ContextMenuProfiler.UI.Core
                 var verbResult = new BenchmarkResult
                 {
                     Name = name,
-                    Type = "Static",
-                    Status = "Static (Not Measured)",
+                    Type = BenchmarkSemantics.Type.Static,
+                    Status = BenchmarkSemantics.Status.StaticNotMeasured,
                     BinaryPath = ExtractExecutablePath(command),
                     RegistryEntries = paths.Select(p => new RegistryHandlerInfo
                     {
@@ -170,7 +170,7 @@ namespace ContextMenuProfiler.UI.Core
                     InterfaceType = "Static Verb",
                     DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
                     TotalTime = 0,
-                    Category = "Static"
+                    Category = BenchmarkSemantics.Category.Static
                 };
 
                 bool anyDisabled = paths.Any(p => p.Split('\\').Last().StartsWith("-"));
@@ -189,7 +189,7 @@ namespace ContextMenuProfiler.UI.Core
                     await semaphore.WaitAsync();
                     try
                     {
-                        uwpResult.Category = "UWP";
+                        uwpResult.Category = BenchmarkSemantics.Category.Uwp;
                         await EnrichBenchmarkResultAsync(uwpResult, hookContextPath);
 
                         uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
@@ -212,7 +212,7 @@ namespace ContextMenuProfiler.UI.Core
 
             if (SkipKnownUnstableHandlers && IsKnownUnstableHandler(result))
             {
-                result.Status = "Skipped (Known Unstable)";
+                result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
                 result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
                 result.InterfaceType = "Skipped";
                 result.CreateTime = 0;
@@ -225,7 +225,7 @@ namespace ContextMenuProfiler.UI.Core
             // Check for Orphaned / Missing DLL
             if (!string.IsNullOrEmpty(result.BinaryPath) && !File.Exists(result.BinaryPath))
             {
-                result.Status = "Orphaned / Missing DLL";
+                result.Status = BenchmarkSemantics.Status.OrphanedMissingDll;
                 result.DetailedStatus = $"The file '{result.BinaryPath}' was not found on disk. This extension is likely corrupted or uninstalled.";
             }
 
@@ -242,15 +242,15 @@ namespace ContextMenuProfiler.UI.Core
                 if (!string.IsNullOrEmpty(hookData.names))
                 {
                     // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
-                    if (!string.Equals(result.Type, "UWP", StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(result.Type, BenchmarkSemantics.Type.Uwp, StringComparison.OrdinalIgnoreCase))
                     {
                         result.Name = hookData.names.Replace("|", ", ");
                     }
-                    if (result.Status == "Unknown") result.Status = "Verified via Hook";
+                    if (result.Status == BenchmarkSemantics.Status.Unknown) result.Status = BenchmarkSemantics.Status.VerifiedViaHook;
                 }
-                else if (result.Status == "Unknown" || result.Status == "OK")
+                else if (result.Status == BenchmarkSemantics.Status.Unknown || result.Status == BenchmarkSemantics.Status.Ok)
                 {
-                    result.Status = "Hook Loaded (No Menu)";
+                    result.Status = BenchmarkSemantics.Status.HookLoadedNoMenu;
                     result.DetailedStatus = "The extension was loaded by the Hook service but it did not provide any context menu items for the test context.";
                 }
                 
@@ -271,27 +271,27 @@ namespace ContextMenuProfiler.UI.Core
             {
                 if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
                 {
-                    result.Status = "IPC Timeout";
+                    result.Status = BenchmarkSemantics.Status.IpcTimeout;
                     result.DetailedStatus = $"Hook service timed out while probing this extension. Error: {hookData.error}";
                 }
                 else
                 {
-                    result.Status = "Load Error";
+                    result.Status = BenchmarkSemantics.Status.LoadError;
                     result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
                 }
             }
             else if (hookData == null)
             {
-                if (result.Status != "Load Error" && result.Status != "Orphaned / Missing DLL")
+                if (result.Status != BenchmarkSemantics.Status.LoadError && result.Status != BenchmarkSemantics.Status.OrphanedMissingDll)
                 {
                     if (hookCall.roundtrip_ms >= 1900)
                     {
-                        result.Status = "IPC Timeout";
+                        result.Status = BenchmarkSemantics.Status.IpcTimeout;
                         result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";
                     }
                     else
                     {
-                        result.Status = "Registry Fallback";
+                        result.Status = BenchmarkSemantics.Status.RegistryFallback;
                         result.DetailedStatus = "The Hook service could not be reached or failed to process this extension. Data is based on registry scan only.";
                     }
                 }
@@ -513,12 +513,12 @@ namespace ContextMenuProfiler.UI.Core
         private string DetermineCategory(IEnumerable<string> locations)
         {
             var locs = locations.ToList();
-            if (locs.Any(l => l.Contains("Background"))) return "Background";
-            if (locs.Any(l => l.Contains("Drive"))) return "Drive";
-            if (locs.Any(l => l.Contains("Directory") || l.Contains("Folder"))) return "Folder";
-            if (locs.Any(l => l.Contains("All Files") || l.Contains("Extension") || l.Contains("All File System Objects"))) return "File";
+            if (locs.Any(l => l.Contains("Background"))) return BenchmarkSemantics.Category.Background;
+            if (locs.Any(l => l.Contains("Drive"))) return BenchmarkSemantics.Category.Drive;
+            if (locs.Any(l => l.Contains("Directory") || l.Contains("Folder"))) return BenchmarkSemantics.Category.Folder;
+            if (locs.Any(l => l.Contains("All Files") || l.Contains("Extension") || l.Contains("All File System Objects"))) return BenchmarkSemantics.Category.File;
             
-            return "File"; // Default
+            return BenchmarkSemantics.Category.File; // Default
         }
     }
 }

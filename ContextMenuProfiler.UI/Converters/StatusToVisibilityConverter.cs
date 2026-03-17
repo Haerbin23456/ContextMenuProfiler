@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using ContextMenuProfiler.UI.Core;
 using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Converters
@@ -20,28 +21,19 @@ namespace ContextMenuProfiler.UI.Converters
             if (param == "NotUWP")
             {
                 string? type = value as string;
-                return (type != "UWP" && type != "UWP / Packaged COM") ? Visibility.Visible : Visibility.Collapsed;
+                return !BenchmarkSemantics.IsPackagedExtensionType(type) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (param == "Fallback")
             {
                 string? statusStr = value as string;
-                bool isFallback = statusStr != null && (statusStr.Contains("Fallback") || statusStr.Contains("Error") || statusStr.Contains("Orphaned") || statusStr.Contains("Missing"));
+                bool isFallback = BenchmarkSemantics.IsFallbackLikeStatus(statusStr);
                 return isFallback ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (value is string status)
             {
-                bool isWarning = status.StartsWith("Load Error") || 
-                                 status.Contains("Exception") || 
-                                 status.Contains("Failed") || 
-                                 status.Contains("Not Registered") || 
-                                 status.Contains("Invalid") || 
-                                 status.Contains("Not Found") ||
-                                 status.Contains("Fallback") ||
-                                 status.Contains("No Menu") ||
-                                 status.Contains("Orphaned") ||
-                                 status.Contains("Missing");
+                bool isWarning = BenchmarkSemantics.IsWarningLikeStatus(status);
                 
                 if (param == "Inverse")
                 {

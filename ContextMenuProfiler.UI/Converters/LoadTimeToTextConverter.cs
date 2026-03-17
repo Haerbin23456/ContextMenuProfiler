@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
+using ContextMenuProfiler.UI.Core;
 using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Converters
@@ -32,10 +33,7 @@ namespace ContextMenuProfiler.UI.Converters
 
             if (string.IsNullOrWhiteSpace(status)) return true;
 
-            return status.Contains("Fallback", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Load Error", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Orphaned", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Missing", StringComparison.OrdinalIgnoreCase) ||
+            return BenchmarkSemantics.IsFallbackLikeStatus(status) ||
                      status.Contains("Not Measured", StringComparison.OrdinalIgnoreCase) ||
                      status.Contains("Unsupported", StringComparison.OrdinalIgnoreCase) ||
                    status.Contains("No Menu", StringComparison.OrdinalIgnoreCase);
