@@ -81,7 +81,8 @@ namespace ContextMenuProfiler.UI.Core
         {
             if (string.IsNullOrWhiteSpace(targetPath))
             {
-                return await RunSystemBenchmarkAsync(ScanMode.Targeted, progress);
+                LogService.Instance.Warning("RunBenchmarkAsync received an empty target path; returning no results.");
+                return new List<BenchmarkResult>();
             }
 
             var registryHandlers = RegistryScanner.ScanHandlersForPath(targetPath);

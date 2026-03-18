@@ -158,6 +158,7 @@ string dashboardPageXamlSource = ReadSource(@"ContextMenuProfiler.UI\Views\Pages
 
 AssertSourceContains(benchmarkServiceSource, "RunBenchmarkAsync(targetPath)", "AnalyzeFileUsesPathSpecificBenchmark");
 AssertSourceNotContains(benchmarkServiceSource, "return RunSystemBenchmark(ScanMode.Targeted)", "AnalyzeFileDoesNotFallbackToSystemScan");
+AssertSourceNotContains(benchmarkServiceSource, "return await RunSystemBenchmarkAsync(ScanMode.Targeted, progress)", "AnalyzeFileDoesNotFallbackToSystemScanAsync");
 
 AssertTrue(
     benchmarkSemanticsSource.Contains("MaxParallelProbeTasks = 8", StringComparison.Ordinal)
