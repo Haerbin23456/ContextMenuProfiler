@@ -22,5 +22,11 @@ namespace ContextMenuProfiler.UI.Core
             public const int InitialResponseCapacity = 1024;
             public const int ReadChunkSize = 4096;
         }
+
+        public static class Response
+        {
+            public const char MultiValueDelimiter = '|';
+            public const string NoIconToken = "NONE";
+        }
     }
 }

@@ -250,7 +250,9 @@ namespace ContextMenuProfiler.UI.Core
                     // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
                     if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
                     {
-                        result.Name = hookData.names.Replace("|", ", ");
+                        result.Name = hookData.names.Replace(
+                            HookIpcSemantics.Response.MultiValueDelimiter.ToString(),
+                            ", ");
                     }
                     if (result.Status == BenchmarkSemantics.Status.Unknown) result.Status = BenchmarkSemantics.Status.VerifiedViaHook;
                 }
@@ -264,7 +266,11 @@ namespace ContextMenuProfiler.UI.Core
                 if (!string.IsNullOrEmpty(hookData.reg_icon) && (hookData.reg_icon.Contains(",") || hookData.reg_icon.ToLower().EndsWith(".ico")))
                     winnerIcon = hookData.reg_icon;
                 if (winnerIcon == null && !string.IsNullOrEmpty(hookData.icons))
-                    winnerIcon = hookData.icons.Split('|').FirstOrDefault(i => !string.IsNullOrEmpty(i) && i != "NONE");
+                    winnerIcon = hookData.icons
+                        .Split(HookIpcSemantics.Response.MultiValueDelimiter)
+                        .FirstOrDefault(i =>
+                            !string.IsNullOrEmpty(i)
+                            && !string.Equals(i, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase));
                 
                 if (winnerIcon != null) result.IconLocation = winnerIcon;
                 

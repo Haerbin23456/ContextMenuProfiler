@@ -187,7 +187,7 @@ namespace ContextMenuProfiler.UI.Core
             var call = await GetHookDataAsync(clsid, contextPath);
             var data = call.data;
             if (data == null || !data.success || string.IsNullOrEmpty(data.names)) return Array.Empty<string>();
-            return data.names.Split('|', StringSplitOptions.RemoveEmptyEntries);
+            return data.names.Split(HookIpcSemantics.Response.MultiValueDelimiter, StringSplitOptions.RemoveEmptyEntries);
         }
 
         private static bool ShouldRetry(int attempt)

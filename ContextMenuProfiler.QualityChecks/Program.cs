@@ -196,7 +196,9 @@ AssertTrue(
     && hookIpcSemanticsSource.Contains("ProbeFileName = \"ContextMenuProfiler_probe.txt\"", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("ProbeFileContent = \"probe\"", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("InitialResponseCapacity = 1024", StringComparison.Ordinal)
-    && hookIpcSemanticsSource.Contains("ReadChunkSize = 4096", StringComparison.Ordinal),
+    && hookIpcSemanticsSource.Contains("ReadChunkSize = 4096", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("MultiValueDelimiter = '|'", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("NoIconToken = \"NONE\"", StringComparison.Ordinal),
     "HookIpcSemanticsDefinesProtocolAndPipeConstants"
 );
 
@@ -209,6 +211,7 @@ AssertTrue(
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileContent", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.InitialResponseCapacity", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ReadChunkSize", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Response.MultiValueDelimiter", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("private static async Task<bool> DelayForRetryAsync", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal),
@@ -226,7 +229,8 @@ AssertTrue(
     && !hookIpcClientSource.Contains("ContextMenuProfiler_probe.txt", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal)
-    && !hookIpcClientSource.Contains("if (ShouldRetry(attempt))", StringComparison.Ordinal),
+    && !hookIpcClientSource.Contains("if (ShouldRetry(attempt))", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("data.names.Split('|',", StringComparison.Ordinal),
     "HookIpcClientNoLegacyInlineProtocolRuntimeLiterals"
 );
 
@@ -238,6 +242,18 @@ AssertTrue(
 AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs", StringComparison.Ordinal),
     "BenchmarkServiceUsesIpcTimeoutThresholdConstant"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("HookIpcSemantics.Response.MultiValueDelimiter", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal),
+    "BenchmarkServiceUsesHookIpcResponseSemantics"
+);
+
+AssertTrue(
+    !benchmarkServiceSource.Contains("hookData.icons.Split('|')", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("i != \"NONE\"", StringComparison.Ordinal),
+    "BenchmarkServiceNoLegacyHookResponseDelimiterLiterals"
 );
 
 AssertTrue(
