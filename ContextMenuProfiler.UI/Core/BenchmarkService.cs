@@ -231,13 +231,7 @@ namespace ContextMenuProfiler.UI.Core
 
             if (SkipKnownUnstableHandlers && IsKnownUnstableHandler(result))
             {
-                result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
-                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.SkippedKnownUnstable"];
-                result.InterfaceType = BenchmarkSemantics.InterfaceType.Skipped;
-                result.CreateTime = 0;
-                result.InitTime = 0;
-                result.QueryTime = 0;
-                result.TotalTime = 0;
+                MarkAsSkippedKnownUnstable(result);
                 return;
             }
 
@@ -257,80 +251,122 @@ namespace ContextMenuProfiler.UI.Core
             result.ConnectTime = hookCall.connect_ms;
             result.IpcRoundTripTime = hookCall.roundtrip_ms;
 
-            if (hookData != null && hookData.success)
+            if (hookData?.success == true)
             {
-                result.InterfaceType = hookData.@interface;
-                if (!string.IsNullOrEmpty(hookData.names))
-                {
-                    // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
-                    if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
-                    {
-                        result.Name = hookData.names.Replace(
-                            HookIpcSemantics.Response.MultiValueDelimiter.ToString(),
-                            ", ");
-                    }
-                    if (result.Status == BenchmarkSemantics.Status.Unknown) result.Status = BenchmarkSemantics.Status.VerifiedViaHook;
-                }
-                else if (result.Status == BenchmarkSemantics.Status.Unknown || result.Status == BenchmarkSemantics.Status.Ok)
-                {
-                    result.Status = BenchmarkSemantics.Status.HookLoadedNoMenu;
-                    result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookLoadedNoMenu"];
-                }
-                
-                string? winnerIcon = null;
-                if (!string.IsNullOrEmpty(hookData.reg_icon)
-                    && (hookData.reg_icon.Contains(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator)
-                        || hookData.reg_icon.EndsWith(BenchmarkSemantics.IconFileExtension.Ico, StringComparison.OrdinalIgnoreCase)))
-                    winnerIcon = hookData.reg_icon;
-                if (winnerIcon == null && !string.IsNullOrEmpty(hookData.icons))
-                    winnerIcon = hookData.icons
-                        .Split(HookIpcSemantics.Response.MultiValueDelimiter)
-                        .FirstOrDefault(i =>
-                            !string.IsNullOrEmpty(i)
-                            && !string.Equals(i, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase));
-                
-                if (winnerIcon != null) result.IconLocation = winnerIcon;
-                
-                result.CreateTime = (long)hookData.create_ms;
-                result.InitTime = (long)hookData.init_ms;
-                result.QueryTime = (long)hookData.query_ms;
-                result.TotalTime = result.CreateTime + result.InitTime + result.QueryTime;
+                ApplyHookSuccessResult(result, hookData);
             }
-            else if (hookData != null && !hookData.success)
+            else if (hookData != null)
             {
-                string hookError = hookData.error ?? LocalizationService.Instance["Dashboard.Value.Unknown"];
+                ApplyHookErrorResult(result, hookData);
+            }
+            else
+            {
+                ApplyHookUnavailableFallback(result, hookCall.roundtrip_ms);
+            }
+        }
 
-                if (BenchmarkSemantics.IsTimeoutLikeError(hookData.error))
-                {
-                    result.Status = BenchmarkSemantics.Status.IpcTimeout;
-                    result.DetailedStatus = string.Format(
-                        LocalizationService.Instance["Dashboard.Detail.HookProbeTimeoutWithError"],
-                        hookError);
-                }
-                else
-                {
-                    result.Status = BenchmarkSemantics.Status.LoadError;
-                    result.DetailedStatus = string.Format(
-                        LocalizationService.Instance["Dashboard.Detail.HookLoadErrorWithError"],
-                        hookError);
-                }
-            }
-            else if (hookData == null)
+        private static void MarkAsSkippedKnownUnstable(BenchmarkResult result)
+        {
+            result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
+            result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.SkippedKnownUnstable"];
+            result.InterfaceType = BenchmarkSemantics.InterfaceType.Skipped;
+            result.CreateTime = 0;
+            result.InitTime = 0;
+            result.QueryTime = 0;
+            result.TotalTime = 0;
+        }
+
+        private static void ApplyHookSuccessResult(BenchmarkResult result, HookResponse hookData)
+        {
+            result.InterfaceType = hookData.@interface;
+            if (!string.IsNullOrEmpty(hookData.names))
             {
-                if (result.Status != BenchmarkSemantics.Status.LoadError && result.Status != BenchmarkSemantics.Status.OrphanedMissingDll)
+                if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
                 {
-                    if (hookCall.roundtrip_ms >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
-                    {
-                        result.Status = BenchmarkSemantics.Status.IpcTimeout;
-                        result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"];
-                    }
-                    else
-                    {
-                        result.Status = BenchmarkSemantics.Status.RegistryFallback;
-                        result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"];
-                    }
+                    result.Name = hookData.names.Replace(
+                        HookIpcSemantics.Response.MultiValueDelimiter.ToString(),
+                        ", ");
+                }
+
+                if (result.Status == BenchmarkSemantics.Status.Unknown)
+                {
+                    result.Status = BenchmarkSemantics.Status.VerifiedViaHook;
                 }
             }
+            else if (result.Status == BenchmarkSemantics.Status.Unknown || result.Status == BenchmarkSemantics.Status.Ok)
+            {
+                result.Status = BenchmarkSemantics.Status.HookLoadedNoMenu;
+                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookLoadedNoMenu"];
+            }
+
+            string? winnerIcon = ResolveHookIconLocation(hookData);
+            if (winnerIcon != null)
+            {
+                result.IconLocation = winnerIcon;
+            }
+
+            result.CreateTime = (long)hookData.create_ms;
+            result.InitTime = (long)hookData.init_ms;
+            result.QueryTime = (long)hookData.query_ms;
+            result.TotalTime = result.CreateTime + result.InitTime + result.QueryTime;
+        }
+
+        private static string? ResolveHookIconLocation(HookResponse hookData)
+        {
+            if (!string.IsNullOrEmpty(hookData.reg_icon)
+                && (hookData.reg_icon.Contains(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator)
+                    || hookData.reg_icon.EndsWith(BenchmarkSemantics.IconFileExtension.Ico, StringComparison.OrdinalIgnoreCase)))
+            {
+                return hookData.reg_icon;
+            }
+
+            if (string.IsNullOrEmpty(hookData.icons))
+            {
+                return null;
+            }
+
+            return hookData.icons
+                .Split(HookIpcSemantics.Response.MultiValueDelimiter)
+                .FirstOrDefault(i =>
+                    !string.IsNullOrEmpty(i)
+                    && !string.Equals(i, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void ApplyHookErrorResult(BenchmarkResult result, HookResponse hookData)
+        {
+            string hookError = hookData.error ?? LocalizationService.Instance["Dashboard.Value.Unknown"];
+
+            if (BenchmarkSemantics.IsTimeoutLikeError(hookData.error))
+            {
+                result.Status = BenchmarkSemantics.Status.IpcTimeout;
+                result.DetailedStatus = string.Format(
+                    LocalizationService.Instance["Dashboard.Detail.HookProbeTimeoutWithError"],
+                    hookError);
+                return;
+            }
+
+            result.Status = BenchmarkSemantics.Status.LoadError;
+            result.DetailedStatus = string.Format(
+                LocalizationService.Instance["Dashboard.Detail.HookLoadErrorWithError"],
+                hookError);
+        }
+
+        private static void ApplyHookUnavailableFallback(BenchmarkResult result, long roundTripMs)
+        {
+            if (result.Status == BenchmarkSemantics.Status.LoadError || result.Status == BenchmarkSemantics.Status.OrphanedMissingDll)
+            {
+                return;
+            }
+
+            if (roundTripMs >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
+            {
+                result.Status = BenchmarkSemantics.Status.IpcTimeout;
+                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"];
+                return;
+            }
+
+            result.Status = BenchmarkSemantics.Status.RegistryFallback;
+            result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"];
         }
 
         private static bool IsKnownUnstableHandler(BenchmarkResult result)
