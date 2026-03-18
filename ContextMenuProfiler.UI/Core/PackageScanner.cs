@@ -11,10 +11,6 @@ namespace ContextMenuProfiler.UI.Core
 {
     public class PackageScanner
     {
-        private static readonly XNamespace NS_DEFAULT = PackageManifestSemantics.Namespaces.Default;
-        private static readonly XNamespace NS_UAP = PackageManifestSemantics.Namespaces.Uap;
-        private static readonly XNamespace NS_DESKTOP4 = PackageManifestSemantics.Namespaces.Desktop4;
-        private static readonly XNamespace NS_DESKTOP5 = PackageManifestSemantics.Namespaces.Desktop5;
         private static readonly XNamespace NS_COM = PackageManifestSemantics.Namespaces.Com;
 
         public static IEnumerable<BenchmarkResult> ScanPackagedExtensions(string? targetPath)
