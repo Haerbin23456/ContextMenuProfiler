@@ -235,6 +235,29 @@ AssertTrue(
     "DashboardViewModelUsesStaFileBenchmarkHelper"
 );
 
+AssertTrue(
+    dashboardViewModelSource.Contains("class DashboardViewModel : ObservableObject, IDisposable", StringComparison.Ordinal),
+    "DashboardViewModelImplementsDisposable"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("LocalizationService.Instance.PropertyChanged += _localizationChangedHandler", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("LocalizationService.Instance.PropertyChanged -= _localizationChangedHandler", StringComparison.Ordinal),
+    "DashboardViewModelLocalizationSubscriptionBalanced"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("HookService.Instance.PropertyChanged += _hookServiceChangedHandler", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("HookService.Instance.PropertyChanged -= _hookServiceChangedHandler", StringComparison.Ordinal),
+    "DashboardViewModelHookSubscriptionBalanced"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("_filterCts?.Dispose();", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("public void Dispose()", StringComparison.Ordinal),
+    "DashboardViewModelDisposesFilterCts"
+);
+
 string[] forbiddenLegacyStatusConverterBindings =
 {
     "StatusToVisibilityConverter}, ConverterParameter=NotActive",

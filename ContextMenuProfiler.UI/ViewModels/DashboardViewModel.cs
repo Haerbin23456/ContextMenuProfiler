@@ -6,6 +6,7 @@ using ContextMenuProfiler.UI.Core.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -31,7 +32,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         private bool _isActive;
     }
 
-    public partial class DashboardViewModel : ObservableObject
+    public partial class DashboardViewModel : ObservableObject, IDisposable
     {
         private enum LastScanMode
         {
@@ -41,7 +42,10 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         private readonly BenchmarkService _benchmarkService;
+        private readonly PropertyChangedEventHandler _localizationChangedHandler;
+        private readonly PropertyChangedEventHandler _hookServiceChangedHandler;
         private CancellationTokenSource? _filterCts;
+        private bool _disposed;
 
         [ObservableProperty]
         private ObservableCollection<BenchmarkResult> _displayResults = new();
@@ -85,6 +89,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             // Cancel previous filter task
             _filterCts?.Cancel();
+            _filterCts?.Dispose();
             _filterCts = new CancellationTokenSource();
             var token = _filterCts.Token;
 
@@ -229,38 +234,47 @@ namespace ContextMenuProfiler.UI.ViewModels
             _benchmarkService = new BenchmarkService();
             // Removed sync ScanResultsView setup
 
+            _localizationChangedHandler = OnLocalizationChanged;
+            _hookServiceChangedHandler = OnHookServicePropertyChanged;
+
             // Initialize categories
             ApplyLocalizedCategoryNames();
-            LocalizationService.Instance.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == "Item[]")
-                {
-                    ApplyLocalizedCategoryNames();
-                    OnPropertyChanged(nameof(CurrentHookStatus));
-                    OnPropertyChanged(nameof(HookStatusMessage));
-                    if (!IsBusy)
-                    {
-                        StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
-                    }
-                }
-            };
+            LocalizationService.Instance.PropertyChanged += _localizationChangedHandler;
 
             // Observe Hook status changes to update command availability
-            HookService.Instance.PropertyChanged += (s, e) => {
-                if (e.PropertyName == nameof(HookService.CurrentStatus))
-                {
-                    App.Current.Dispatcher.Invoke(() => {
-                        OnPropertyChanged(nameof(CurrentHookStatus));
-                        OnPropertyChanged(nameof(HookStatusMessage));
-                        ScanSystemCommand.NotifyCanExecuteChanged();
-                        PickAndScanFileCommand.NotifyCanExecuteChanged();
-                        RefreshCommand.NotifyCanExecuteChanged();
-                    });
-                }
-            };
+            HookService.Instance.PropertyChanged += _hookServiceChangedHandler;
 
             // 启动后自动尝试注入
             _ = AutoEnsureHook();
+        }
+
+        private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "Item[]")
+            {
+                ApplyLocalizedCategoryNames();
+                OnPropertyChanged(nameof(CurrentHookStatus));
+                OnPropertyChanged(nameof(HookStatusMessage));
+                if (!IsBusy)
+                {
+                    StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
+                }
+            }
+        }
+
+        private void OnHookServicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(HookService.CurrentStatus))
+            {
+                App.Current.Dispatcher.Invoke(() =>
+                {
+                    OnPropertyChanged(nameof(CurrentHookStatus));
+                    OnPropertyChanged(nameof(HookStatusMessage));
+                    ScanSystemCommand.NotifyCanExecuteChanged();
+                    PickAndScanFileCommand.NotifyCanExecuteChanged();
+                    RefreshCommand.NotifyCanExecuteChanged();
+                });
+            }
         }
 
         [RelayCommand]
@@ -741,6 +755,24 @@ namespace ContextMenuProfiler.UI.ViewModels
                 .Where(r => r.IsEnabled)
                 .Sum(r => r.WallClockTime > 0 ? r.WallClockTime : Math.Max(0, r.TotalTime));
             RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : LocalizationService.Instance["Dashboard.Value.None"];
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            LocalizationService.Instance.PropertyChanged -= _localizationChangedHandler;
+            HookService.Instance.PropertyChanged -= _hookServiceChangedHandler;
+
+            _filterCts?.Cancel();
+            _filterCts?.Dispose();
+            _filterCts = null;
+
+            GC.SuppressFinalize(this);
         }
     }
 }
