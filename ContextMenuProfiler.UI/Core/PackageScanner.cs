@@ -126,7 +126,9 @@ namespace ContextMenuProfiler.UI.Core
                 Path = package.Id.FullName,
                 BinaryPath = binaryPath,
                 // 简洁且必要：将 DLL 路径作为 Hint 传给 Converter，这是已知事实，不是猜测
-                IconLocation = !string.IsNullOrEmpty(logoPath) ? $"{logoPath}|{binaryPath}" : logoPath,
+                IconLocation = !string.IsNullOrEmpty(logoPath)
+                    ? $"{logoPath}{BenchmarkSemantics.IconLocation.HintSeparator}{binaryPath}"
+                    : logoPath,
                 PackageName = package.Id.Name,
                 Version = $"{package.Id.Version.Major}.{package.Id.Version.Minor}.{package.Id.Version.Build}",
                 IconSource = !string.IsNullOrEmpty(logoPath)
@@ -148,7 +150,7 @@ namespace ContextMenuProfiler.UI.Core
                 
                 // 2. 统一返回 ms-appx 协议，让 Converter 的智能逻辑去处理缩放和稀疏包路径
                 // 这是最稳健的做法，因为 Converter 已经具备了处理 scale-xxx 和 EffectiveLocation 的能力
-                return $"ms-appx://{package.Id.Name}/{relativeLogo.TrimStart('\\', '/')}";
+                return $"{BenchmarkSemantics.IconLocation.MsAppxUriPrefix}{package.Id.Name}/{relativeLogo.TrimStart('\\', '/')}";
             }
             catch { return null; }
         }

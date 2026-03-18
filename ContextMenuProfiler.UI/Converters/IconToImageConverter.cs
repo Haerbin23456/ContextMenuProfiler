@@ -14,6 +14,7 @@ using Windows.ApplicationModel;
 using System.Linq;
 
 using System.Collections.Concurrent;
+using ContextMenuProfiler.UI.Core;
 
 namespace ContextMenuProfiler.UI.Converters
 {
@@ -29,7 +30,7 @@ namespace ContextMenuProfiler.UI.Converters
                 // 解析 URI 和可选的 Binary Hint
                 string actualUri = uriStr;
                 string? hintDllPath = null;
-                int pipeIndex = uriStr.IndexOf('|');
+                int pipeIndex = uriStr.IndexOf(BenchmarkSemantics.IconLocation.HintSeparator);
                 if (pipeIndex > 0) {
                     actualUri = uriStr.Substring(0, pipeIndex);
                     hintDllPath = uriStr.Substring(pipeIndex + 1);
@@ -88,7 +89,11 @@ namespace ContextMenuProfiler.UI.Converters
         {
             string? path = value as string;
             
-            if (string.IsNullOrEmpty(path) || path == "NONE") return DependencyProperty.UnsetValue;
+            if (string.IsNullOrEmpty(path)
+                || string.Equals(path, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return DependencyProperty.UnsetValue;
+            }
 
             if (_iconCache.TryGetValue(path, out var cached)) return cached;
 
@@ -112,7 +117,7 @@ namespace ContextMenuProfiler.UI.Converters
             try
             {
                 // Handle ms-appx:// URIs (UWP resources)
-                if (path.StartsWith("ms-appx://"))
+                if (path.StartsWith(BenchmarkSemantics.IconLocation.MsAppxUriPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     var resolvedPath = ResolveMsAppxUri(path);
                     if (string.IsNullOrEmpty(resolvedPath)) return null;

@@ -161,6 +161,7 @@ string packageScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageSc
 string dashboardViewModelSource = ReadSource(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
 string registryPathHelperSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
 string nullOrEmptyConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\NullOrEmptyToLocalizedConverter.cs");
+string iconToImageConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\IconToImageConverter.cs");
 string statusVisibilityConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
 string typeToIconConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\TypeToIconConverter.cs");
 string dashboardPageXamlSource = ReadSource(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
@@ -238,7 +239,10 @@ AssertTrue(
 
 AssertTrue(
     benchmarkSemanticsSource.Contains("public static class IconSource", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("ManifestAppLogo = \"ManifestAppLogo\"", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("ManifestAppLogo = \"ManifestAppLogo\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static class IconLocation", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("HintSeparator = '|'", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("MsAppxUriPrefix = \"ms-appx://\"", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesIconSourceMarkers"
 );
 
@@ -293,6 +297,8 @@ AssertTrue(
 
 AssertTrue(
     packageScannerSource.Contains("BenchmarkSemantics.IconSource.ManifestAppLogo", StringComparison.Ordinal)
+    && packageScannerSource.Contains("BenchmarkSemantics.IconLocation.HintSeparator", StringComparison.Ordinal)
+    && packageScannerSource.Contains("BenchmarkSemantics.IconLocation.MsAppxUriPrefix", StringComparison.Ordinal)
     && !packageScannerSource.Contains("\"Manifest (App Logo)\"", StringComparison.Ordinal)
     && !packageScannerSource.Contains("\"None\"", StringComparison.Ordinal),
     "PackageScannerUsesIconSourceSemantics"
@@ -302,6 +308,16 @@ AssertTrue(
     nullOrEmptyConverterSource.Contains("BenchmarkSemantics.IconSource.ManifestAppLogo", StringComparison.Ordinal)
     && nullOrEmptyConverterSource.Contains("Dashboard.Value.ManifestAppLogo", StringComparison.Ordinal),
     "NullOrEmptyConverterMapsIconSourceMarkerLocalization"
+);
+
+AssertTrue(
+    iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.HintSeparator", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MsAppxUriPrefix", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("uriStr.IndexOf('|')", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("path == \"NONE\"", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("path.StartsWith(\"ms-appx://\")", StringComparison.Ordinal),
+    "IconToImageConverterUsesIconProtocolSemantics"
 );
 
 AssertTrue(

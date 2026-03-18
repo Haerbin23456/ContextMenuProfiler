@@ -183,6 +183,12 @@ namespace ContextMenuProfiler.UI.Core
             public const string ManifestAppLogo = "ManifestAppLogo";
         }
 
+        public static class IconLocation
+        {
+            public const char HintSeparator = '|';
+            public const string MsAppxUriPrefix = "ms-appx://";
+        }
+
         public static class LocationSummary
         {
             public const string ModernShellUwp = "Modern Shell (UWP)";
