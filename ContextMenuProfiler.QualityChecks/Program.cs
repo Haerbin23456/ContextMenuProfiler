@@ -176,7 +176,8 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("HookReconnectStabilizationDelayMs = 1000", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("ClipboardRetryAttempts = 5", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("ClipboardRetryDelayMs = 100", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("ClipboardCantOpenHResult = 0x800401D0", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("ClipboardCantOpenHResult = 0x800401D0", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("RealShellBenchmarkUnsupportedMs = -1", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRuntimeProbeConstants"
 );
 
@@ -411,6 +412,12 @@ AssertTrue(
 AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.MaxParallelProbeTasks", StringComparison.Ordinal),
     "BenchmarkServiceUsesMaxParallelProbeTasksConstant"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.RealShellBenchmarkUnsupportedMs", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("=> -1", StringComparison.Ordinal),
+    "BenchmarkServiceUsesRealShellUnsupportedSentinelConstant"
 );
 
 AssertTrue(

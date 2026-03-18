@@ -220,6 +220,7 @@ namespace ContextMenuProfiler.UI.Core
             public const int ClipboardRetryAttempts = 5;
             public const int ClipboardRetryDelayMs = 100;
             public const uint ClipboardCantOpenHResult = 0x800401D0;
+            public const long RealShellBenchmarkUnsupportedMs = -1;
             public const string SkipUnstableHandlersEnvVar = "CMP_SKIP_UNSTABLE_HANDLERS";
             public const string EnabledFlagValue = "1";
         }

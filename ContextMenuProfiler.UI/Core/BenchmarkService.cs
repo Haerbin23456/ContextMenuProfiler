@@ -519,7 +519,8 @@ namespace ContextMenuProfiler.UI.Core
             }
         }
 
-        public long RunRealShellBenchmark(string? filePath = null) => -1;
+        public long RunRealShellBenchmark(string? filePath = null)
+            => BenchmarkSemantics.Runtime.RealShellBenchmarkUnsupportedMs;
 
         private string DetermineCategory(IEnumerable<string> locations)
         {
