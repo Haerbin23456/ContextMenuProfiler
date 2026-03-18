@@ -121,7 +121,12 @@ namespace ContextMenuProfiler.UI.Core
                         FriendlyName = meta.FriendlyName
                     };
 
-                    if (string.IsNullOrEmpty(result.Name)) result.Name = $"Unknown ({clsid})";
+                    if (string.IsNullOrEmpty(result.Name))
+                    {
+                        result.Name = string.Format(
+                            LocalizationService.Instance["Dashboard.Value.UnknownWithClsid"],
+                            clsid);
+                    }
 
                     resultsMap[clsid] = result;
                     result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));

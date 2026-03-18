@@ -140,7 +140,8 @@ string[] criticalKeys =
     "Hook.NotInjected",
     "Dashboard.ScanSystem",
     "Dashboard.AnalyzeFile",
-    "Dashboard.Status.ScanComplete"
+    "Dashboard.Status.ScanComplete",
+    "Dashboard.Value.UnknownWithClsid"
 };
 
 foreach (var key in criticalKeys)
@@ -310,6 +311,12 @@ AssertTrue(
 AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.MaxParallelProbeTasks", StringComparison.Ordinal),
     "BenchmarkServiceUsesMaxParallelProbeTasksConstant"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("LocalizationService.Instance[\"Dashboard.Value.UnknownWithClsid\"]", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("Unknown (", StringComparison.Ordinal),
+    "BenchmarkServiceUsesLocalizedUnknownWithClsidName"
 );
 
 AssertTrue(
