@@ -61,9 +61,9 @@ namespace ContextMenuProfiler.UI.Core
             string parentPath = registryPath.Substring(0, lastSlash);
             string keyName = registryPath.Substring(lastSlash + 1);
 
-            if (keyName.StartsWith("-")) return; // Already disabled
+            if (keyName.StartsWith(BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefix, StringComparison.Ordinal)) return; // Already disabled
 
-            RenameRegistryKey(parentPath, keyName, "-" + keyName);
+            RenameRegistryKey(parentPath, keyName, BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefix + keyName);
         }
 
         public static void EnableRegistryKey(string registryPath)
@@ -75,9 +75,9 @@ namespace ContextMenuProfiler.UI.Core
             string parentPath = registryPath.Substring(0, lastSlash);
             string keyName = registryPath.Substring(lastSlash + 1);
 
-            if (!keyName.StartsWith("-")) return; // Already enabled
+            if (!keyName.StartsWith(BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefix, StringComparison.Ordinal)) return; // Already enabled
 
-            RenameRegistryKey(parentPath, keyName, keyName.Substring(1));
+            RenameRegistryKey(parentPath, keyName, keyName.Substring(BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefix.Length));
         }
 
         public static void DeleteRegistryKey(string registryPath)

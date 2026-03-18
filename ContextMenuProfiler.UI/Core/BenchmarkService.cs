@@ -260,7 +260,9 @@ namespace ContextMenuProfiler.UI.Core
                 }
                 
                 string? winnerIcon = null;
-                if (!string.IsNullOrEmpty(hookData.reg_icon) && (hookData.reg_icon.Contains(",") || hookData.reg_icon.ToLower().EndsWith(".ico")))
+                if (!string.IsNullOrEmpty(hookData.reg_icon)
+                    && (hookData.reg_icon.Contains(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator)
+                        || hookData.reg_icon.EndsWith(BenchmarkSemantics.IconFileExtension.Ico, StringComparison.OrdinalIgnoreCase)))
                     winnerIcon = hookData.reg_icon;
                 if (winnerIcon == null && !string.IsNullOrEmpty(hookData.icons))
                     winnerIcon = hookData.icons
@@ -465,7 +467,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 using (var key = Registry.ClassesRoot.OpenSubKey(regPath))
                 {
-                    string? icon = key?.GetValue("Icon") as string;
+                    string? icon = key?.GetValue(BenchmarkSemantics.StaticVerb.IconValueName) as string;
                     if (!string.IsNullOrEmpty(icon)) return icon;
                 }
             }

@@ -159,7 +159,9 @@ string benchmarkStatisticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\Benc
 string hookIpcClientSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
 string hookIpcSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
 string registryScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\RegistryScanner.cs");
+string extensionManagerSource = ReadSource(@"ContextMenuProfiler.UI\Core\ExtensionManager.cs");
 string packageScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
+string shellUtilsSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\ShellUtils.cs");
 string dashboardViewModelSource = ReadSource(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
 string registryPathHelperSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
 string nullOrEmptyConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\NullOrEmptyToLocalizedConverter.cs");
@@ -227,13 +229,19 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("BuildProgIdHandlers", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildSystemFileAssociationShell", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildProgIdShell", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("IsDirectoryLikeAssociationType", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("IsDirectoryLikeAssociationType", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static class RegistryToken", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("ExtensionPrefix = \".\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("ClsidOpenBrace = '{'", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("ClsidCloseBrace = '}'", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool LooksLikeBracedClsid", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRegistryScannerLocationHelpers"
 );
 
 AssertTrue(
     benchmarkSemanticsSource.Contains("public static class StaticVerb", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("UniqueKeySeparator = '|'", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IconValueName = \"Icon\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static bool IsIgnoredStaticVerbName", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static string BuildStaticVerbUniqueKey", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static bool TryParseStaticVerbUniqueKey", StringComparison.Ordinal),
@@ -246,13 +254,16 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("public static class IconLocation", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("HintSeparator = '|'", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("MsAppxUriPrefix = \"ms-appx://\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IndirectStringPrefix = \"@\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("MrtPreferredTargetSizeToken = \"targetsize-48\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("MrtPreferredScaleToken = \"scale-200\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IconResourceIndexSeparator = ','", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("IndirectStringBufferSize = 1024", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static class IconFileExtension", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("Png = \".png\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("Jpg = \".jpg\"", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("Bmp = \".bmp\"", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("Bmp = \".bmp\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("Ico = \".ico\"", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesIconSourceMarkers"
 );
 
@@ -268,7 +279,11 @@ AssertTrue(
     comRegistrySemanticsSource.Contains("public static class ComRegistrySemantics", StringComparison.Ordinal)
     && comRegistrySemanticsSource.Contains("FriendlyNameValueName = \"FriendlyName\"", StringComparison.Ordinal)
     && comRegistrySemanticsSource.Contains("InprocServer32SubKeyName = \"InprocServer32\"", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("ClsidPrefix = \"CLSID\"", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("Wow6432NodeClsidPrefix = @\"WOW6432Node\\CLSID\"", StringComparison.Ordinal)
     && comRegistrySemanticsSource.Contains("BuildPackagedComClassIndexPath", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("BuildClsidPath", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("BuildWow6432NodeClsidPath", StringComparison.Ordinal)
     && comRegistrySemanticsSource.Contains("BuildPackageRepositoryPath", StringComparison.Ordinal)
     && comRegistrySemanticsSource.Contains("ExtractPackageIdPrefix", StringComparison.Ordinal),
     "ComRegistrySemanticsDefinesRegistryMetadataTokens"
@@ -287,6 +302,9 @@ AssertTrue(
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryToken.ExtensionPrefix", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.LooksLikeBracedClsid", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringPrefix", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.CommandSubKeyName", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.MuiVerbValueName", StringComparison.Ordinal)
@@ -303,9 +321,34 @@ AssertTrue(
     && !registryScannerSource.Contains("@\"*\\shellex\\ContextMenuHandlers\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("@\"Directory\\shell\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("SystemFileAssociations\\", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("keyName.StartsWith(\".\")", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("trimmedName.StartsWith(\"{\")", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("trimmedName.EndsWith(\"}\")", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("trimmedGuid.StartsWith(\"{\")", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("displayName.StartsWith(\"@\")", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"Attributes\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"AnyCode\"", StringComparison.Ordinal),
     "RegistryScannerNoInlineLocationLabelLiterals"
+);
+
+AssertTrue(
+    extensionManagerSource.Contains("BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefix", StringComparison.Ordinal)
+    && !extensionManagerSource.Contains("keyName.StartsWith(\"-\")", StringComparison.Ordinal)
+    && !extensionManagerSource.Contains("\"-\" + keyName", StringComparison.Ordinal)
+    && !extensionManagerSource.Contains("keyName.Substring(1)", StringComparison.Ordinal),
+    "ExtensionManagerUsesDisabledPrefixSemantics"
+);
+
+AssertTrue(
+    shellUtilsSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringPrefix", StringComparison.Ordinal)
+    && shellUtilsSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringBufferSize", StringComparison.Ordinal)
+    && shellUtilsSource.Contains("ComRegistrySemantics.BuildClsidPath", StringComparison.Ordinal)
+    && shellUtilsSource.Contains("ComRegistrySemantics.BuildWow6432NodeClsidPath", StringComparison.Ordinal)
+    && !shellUtilsSource.Contains("StartsWith(\"@\")", StringComparison.Ordinal)
+    && !shellUtilsSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
+    && !shellUtilsSource.Contains("OpenSubKey($@\"CLSID\\", StringComparison.Ordinal)
+    && !shellUtilsSource.Contains("OpenSubKey($@\"WOW6432Node\\CLSID\\", StringComparison.Ordinal),
+    "ShellUtilsUsesSemanticResourceAndClsidHelpers"
 );
 
 AssertTrue(
@@ -357,8 +400,10 @@ AssertTrue(
 AssertTrue(
     iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.HintSeparator", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MsAppxUriPrefix", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringPrefix", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MrtPreferredTargetSizeToken", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MrtPreferredScaleToken", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.IconResourceIndexSeparator", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringBufferSize", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconFileExtension.Png", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconFileExtension.Jpg", StringComparison.Ordinal)
@@ -366,6 +411,8 @@ AssertTrue(
     && iconToImageConverterSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("uriStr.IndexOf('|')", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("path == \"NONE\"", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("path.StartsWith(\"@\")", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("path.LastIndexOf(',')", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("path.StartsWith(\"ms-appx://\")", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("targetsize-48", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("scale-200", StringComparison.Ordinal)
@@ -478,13 +525,17 @@ AssertTrue(
 
 AssertTrue(
     benchmarkServiceSource.Contains("HookIpcSemantics.Response.MultiValueDelimiter", StringComparison.Ordinal)
-    && benchmarkServiceSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal),
+    && benchmarkServiceSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("BenchmarkSemantics.IconLocation.IconResourceIndexSeparator", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("BenchmarkSemantics.IconFileExtension.Ico", StringComparison.Ordinal),
     "BenchmarkServiceUsesHookIpcResponseSemantics"
 );
 
 AssertTrue(
     !benchmarkServiceSource.Contains("hookData.icons.Split('|')", StringComparison.Ordinal)
-    && !benchmarkServiceSource.Contains("i != \"NONE\"", StringComparison.Ordinal),
+    && !benchmarkServiceSource.Contains("i != \"NONE\"", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("hookData.reg_icon.Contains(\",\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("EndsWith(\".ico\")", StringComparison.Ordinal),
     "BenchmarkServiceNoLegacyHookResponseDelimiterLiterals"
 );
 
@@ -492,6 +543,12 @@ AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command)", StringComparison.Ordinal)
     && !benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal),
     "BenchmarkServiceUsesStaticVerbKeyParser"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.StaticVerb.IconValueName", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("GetValue(\"Icon\")", StringComparison.Ordinal),
+    "BenchmarkServiceUsesStaticVerbIconValueSemantic"
 );
 
 AssertTrue(

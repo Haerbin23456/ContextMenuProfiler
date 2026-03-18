@@ -187,8 +187,10 @@ namespace ContextMenuProfiler.UI.Core
         {
             public const char HintSeparator = '|';
             public const string MsAppxUriPrefix = "ms-appx://";
+            public const string IndirectStringPrefix = "@";
             public const string MrtPreferredTargetSizeToken = "targetsize-48";
             public const string MrtPreferredScaleToken = "scale-200";
+            public const char IconResourceIndexSeparator = ',';
             public const int IndirectStringBufferSize = 1024;
         }
 
@@ -197,6 +199,7 @@ namespace ContextMenuProfiler.UI.Core
             public const string Png = ".png";
             public const string Jpg = ".jpg";
             public const string Bmp = ".bmp";
+            public const string Ico = ".ico";
         }
 
         public static class LocationSummary
@@ -213,10 +216,18 @@ namespace ContextMenuProfiler.UI.Core
             public const string StaticVerbDisabledKeyPrefix = "-";
         }
 
+        public static class RegistryToken
+        {
+            public const string ExtensionPrefix = ".";
+            public const char ClsidOpenBrace = '{';
+            public const char ClsidCloseBrace = '}';
+        }
+
         public static class StaticVerb
         {
             public const string CommandSubKeyName = "command";
             public const string MuiVerbValueName = "MUIVerb";
+            public const string IconValueName = "Icon";
             public const string IgnoredVerbAttributes = "Attributes";
             public const string IgnoredVerbAnyCode = "AnyCode";
             public const char UniqueKeySeparator = '|';
@@ -377,6 +388,19 @@ namespace ContextMenuProfiler.UI.Core
             name = key[..separatorIndex];
             command = key[(separatorIndex + 1)..];
             return true;
+        }
+
+        public static bool LooksLikeBracedClsid(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string trimmed = value.Trim();
+            return trimmed.Length > 2
+                && trimmed[0] == RegistryToken.ClsidOpenBrace
+                && trimmed[^1] == RegistryToken.ClsidCloseBrace;
         }
 
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)

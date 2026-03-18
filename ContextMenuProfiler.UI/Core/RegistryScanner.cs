@@ -63,7 +63,7 @@ namespace ContextMenuProfiler.UI.Core
 
                 Parallel.ForEach(rootKeys, options, keyName =>
                 {
-                    if (keyName.StartsWith("."))
+                    if (keyName.StartsWith(BenchmarkSemantics.RegistryToken.ExtensionPrefix, StringComparison.Ordinal))
                     {
                         // It's an extension
                         // Check SystemFileAssociations
@@ -143,7 +143,7 @@ namespace ContextMenuProfiler.UI.Core
                         bool found = false;
 
                         // Pattern 1: Key name is the CLSID (e.g. {GUID})
-                        if (trimmedName.StartsWith("{") && trimmedName.EndsWith("}") && Guid.TryParse(trimmedName, out clsid))
+                        if (BenchmarkSemantics.LooksLikeBracedClsid(trimmedName) && Guid.TryParse(trimmedName, out clsid))
                         {
                             found = true;
                         }
@@ -157,7 +157,7 @@ namespace ContextMenuProfiler.UI.Core
                                 if (val is string guidStr)
                                 {
                                     string trimmedGuid = guidStr.Trim();
-                                    if (trimmedGuid.StartsWith("{") && Guid.TryParse(trimmedGuid, out clsid))
+                                    if (BenchmarkSemantics.LooksLikeBracedClsid(trimmedGuid) && Guid.TryParse(trimmedGuid, out clsid))
                                     {
                                         found = true;
                                     }
@@ -295,7 +295,8 @@ namespace ContextMenuProfiler.UI.Core
                             }
 
                             // Resolve MUI string if necessary
-                            if (!string.IsNullOrEmpty(displayName) && displayName.StartsWith("@"))
+                            if (!string.IsNullOrEmpty(displayName)
+                                && displayName.StartsWith(BenchmarkSemantics.IconLocation.IndirectStringPrefix, StringComparison.Ordinal))
                             {
                                 displayName = ShellUtils.ResolveMuiString(displayName);
                             }

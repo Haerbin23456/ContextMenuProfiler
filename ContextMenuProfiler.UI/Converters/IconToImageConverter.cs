@@ -130,7 +130,7 @@ namespace ContextMenuProfiler.UI.Converters
                 path = Environment.ExpandEnvironmentVariables(path);
                 
                 // Handle MUI / UWP Resource strings (starts with @)
-                if (path.StartsWith("@"))
+                if (path.StartsWith(BenchmarkSemantics.IconLocation.IndirectStringPrefix, StringComparison.Ordinal))
                 {
                     StringBuilder sb = new StringBuilder(BenchmarkSemantics.IconLocation.IndirectStringBufferSize);
                     int res = SHLoadIndirectString(path, sb, (uint)sb.Capacity, IntPtr.Zero);
@@ -150,7 +150,7 @@ namespace ContextMenuProfiler.UI.Converters
                     else
                     {
                         // Remove @ prefix and try parsing as normal path
-                        path = path.Substring(1);
+                        path = path.Substring(BenchmarkSemantics.IconLocation.IndirectStringPrefix.Length);
                     }
                 }
 
@@ -158,7 +158,7 @@ namespace ContextMenuProfiler.UI.Converters
                 string filePath = path;
 
                 // Parse resource index (path,index or path,-id)
-                int commaIndex = path.LastIndexOf(',');
+                int commaIndex = path.LastIndexOf(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator);
                 if (commaIndex > 0)
                 {
                     string indexStr = path.Substring(commaIndex + 1);

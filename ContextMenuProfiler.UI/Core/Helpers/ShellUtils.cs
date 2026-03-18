@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
+using ContextMenuProfiler.UI.Core;
 
 namespace ContextMenuProfiler.UI.Core.Helpers
 {
@@ -15,9 +16,13 @@ namespace ContextMenuProfiler.UI.Core.Helpers
         /// </summary>
         public static string ResolveMuiString(string? muiString)
         {
-            if (string.IsNullOrEmpty(muiString) || !muiString.StartsWith("@")) return muiString ?? "";
+            if (string.IsNullOrEmpty(muiString)
+                || !muiString.StartsWith(BenchmarkSemantics.IconLocation.IndirectStringPrefix, StringComparison.Ordinal))
+            {
+                return muiString ?? "";
+            }
             
-            var sb = new StringBuilder(1024);
+            var sb = new StringBuilder(BenchmarkSemantics.IconLocation.IndirectStringBufferSize);
             if (SHLoadIndirectString(muiString, sb, (uint)sb.Capacity, IntPtr.Zero) == 0)
             {
                 return sb.ToString();
@@ -32,8 +37,8 @@ namespace ContextMenuProfiler.UI.Core.Helpers
         {
             // HKCR is a merged view of HKLM\SOFTWARE\Classes and HKCU\SOFTWARE\Classes.
             // We only need to check HKCR and then WOW6432Node specifically if not found.
-            return Registry.ClassesRoot.OpenSubKey($@"CLSID\{clsidB}")
-                ?? Registry.ClassesRoot.OpenSubKey($@"WOW6432Node\CLSID\{clsidB}");
+            return Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildClsidPath(clsidB))
+                ?? Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildWow6432NodeClsidPath(clsidB));
         }
     }
 }

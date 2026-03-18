@@ -15,6 +15,8 @@ namespace ContextMenuProfiler.UI.Core
         public const string DisplayNameValueName = "DisplayName";
         public const string PackageInstallPathValueName = "Path";
         public const string DllPathValueName = "DllPath";
+        public const string ClsidPrefix = "CLSID";
+        public const string Wow6432NodeClsidPrefix = @"WOW6432Node\CLSID";
 
         public const string PackagedComClassIndexPrefix = @"PackagedCom\ClassIndex";
         public const string PackagedComPackagePrefix = @"PackagedCom\Package";
@@ -25,6 +27,16 @@ namespace ContextMenuProfiler.UI.Core
         public static string BuildPackagedComClassIndexPath(string clsidB)
         {
             return $@"{PackagedComClassIndexPrefix}\{clsidB}";
+        }
+
+        public static string BuildClsidPath(string clsidB)
+        {
+            return $@"{ClsidPrefix}\{clsidB}";
+        }
+
+        public static string BuildWow6432NodeClsidPath(string clsidB)
+        {
+            return $@"{Wow6432NodeClsidPrefix}\{clsidB}";
         }
 
         public static string BuildPackagedComPackageClassPath(string packageName, string clsidB)
