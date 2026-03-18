@@ -222,6 +222,19 @@ AssertTrue(
     "TypeToIconConverterUsesPackagedTypeSemanticHelper"
 );
 
+AssertTrue(
+    dashboardViewModelSource.Contains("BeginScanSession(", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("LastScanMode.System", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("LastScanMode.File", StringComparison.Ordinal),
+    "DashboardViewModelUsesScanSessionInitializer"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("private async Task<List<BenchmarkResult>> RunFileBenchmarkInStaAsync", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("RunFileBenchmarkInStaAsync(filePath)", StringComparison.Ordinal),
+    "DashboardViewModelUsesStaFileBenchmarkHelper"
+);
+
 string[] forbiddenLegacyStatusConverterBindings =
 {
     "StatusToVisibilityConverter}, ConverterParameter=NotActive",

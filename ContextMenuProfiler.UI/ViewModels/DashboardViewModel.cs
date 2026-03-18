@@ -336,17 +336,9 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand(CanExecute = nameof(CanExecuteBenchmark))]
         private async Task ScanSystem()
         {
-            _lastScanMode = LastScanMode.System;
-            StatusText = LocalizationService.Instance["Dashboard.Status.ScanningSystem"];
-            IsBusy = true;
-            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
-            
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                _scanOrderCounter = 0;
-                Results.Clear();
-                DisplayResults.Clear();
-            });
+            BeginScanSession(
+                LastScanMode.System,
+                LocalizationService.Instance["Dashboard.Status.ScanningSystem"]);
             
             try
             {
@@ -451,36 +443,14 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
-            _lastScanMode = LastScanMode.File;
-            _lastScanPath = filePath;
-            StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath);
-            IsBusy = true;
-            _scanOrderCounter = 0;
-            Results.Clear();
-            DisplayResults.Clear(); // Clear display
-            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
+            BeginScanSession(
+                LastScanMode.File,
+                string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath),
+                filePath);
 
             try
             {
-                var results = await Task.Run(() =>
-                {
-                    List<BenchmarkResult>? threadResult = null;
-                    var thread = new Thread(() =>
-                    {
-                        try
-                        {
-                            threadResult = _benchmarkService.RunBenchmark(filePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogService.Instance.Error("Background File Scan Error", ex);
-                        }
-                    });
-                    thread.SetApartmentState(ApartmentState.STA);
-                    thread.Start();
-                    thread.Join();
-                    return threadResult ?? new List<BenchmarkResult>();
-                });
+                var results = await RunFileBenchmarkInStaAsync(filePath);
 
                 if (results.Count > 0)
                 {
@@ -506,6 +476,45 @@ namespace ContextMenuProfiler.UI.ViewModels
             {
                 IsBusy = false;
             }
+        }
+
+        private void BeginScanSession(LastScanMode mode, string scanningStatusText, string scanPath = "")
+        {
+            _lastScanMode = mode;
+            _lastScanPath = scanPath;
+            StatusText = scanningStatusText;
+            IsBusy = true;
+            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
+
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                _scanOrderCounter = 0;
+                Results.Clear();
+                DisplayResults.Clear();
+            });
+        }
+
+        private async Task<List<BenchmarkResult>> RunFileBenchmarkInStaAsync(string filePath)
+        {
+            return await Task.Run(() =>
+            {
+                List<BenchmarkResult>? threadResult = null;
+                var thread = new Thread(() =>
+                {
+                    try
+                    {
+                        threadResult = _benchmarkService.RunBenchmark(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.Instance.Error("Background File Scan Error", ex);
+                    }
+                });
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return threadResult ?? new List<BenchmarkResult>();
+            });
         }
 
         private void ApplyLocalizedCategoryNames()
