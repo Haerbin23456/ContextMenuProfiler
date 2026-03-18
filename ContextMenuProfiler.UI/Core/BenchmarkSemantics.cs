@@ -3,6 +3,22 @@ using System.Collections.Generic;
 
 namespace ContextMenuProfiler.UI.Core
 {
+    public enum BenchmarkStatus
+    {
+        Unknown,
+        Ok,
+        VerifiedViaHook,
+        HookLoadedNoMenu,
+        OrphanedMissingDll,
+        IpcTimeout,
+        LoadError,
+        RegistryFallback,
+        StaticNotMeasured,
+        SkippedKnownUnstable,
+        DisabledPendingRestart,
+        EnabledPendingRestart
+    }
+
     public static class BenchmarkSemantics
     {
         private static readonly string[] FolderLocationHints =
@@ -27,10 +43,10 @@ namespace ContextMenuProfiler.UI.Core
             public const int Background = 4;
         }
 
-        public const string StatusRegistryFallback = Status.RegistryFallback;
-        public const string StatusHookLoadedNoMenu = Status.HookLoadedNoMenu;
-        public const string StatusLoadError = Status.LoadError;
-        public const string StatusOrphanedMissingDll = Status.OrphanedMissingDll;
+        public const BenchmarkStatus StatusRegistryFallback = Status.RegistryFallback;
+        public const BenchmarkStatus StatusHookLoadedNoMenu = Status.HookLoadedNoMenu;
+        public const BenchmarkStatus StatusLoadError = Status.LoadError;
+        public const BenchmarkStatus StatusOrphanedMissingDll = Status.OrphanedMissingDll;
 
         public static class Type
         {
@@ -59,18 +75,18 @@ namespace ContextMenuProfiler.UI.Core
 
         public static class Status
         {
-            public const string Unknown = "Unknown";
-            public const string Ok = "OK";
-            public const string VerifiedViaHook = "Verified via Hook";
-            public const string HookLoadedNoMenu = "Hook Loaded (No Menu)";
-            public const string OrphanedMissingDll = "Orphaned / Missing DLL";
-            public const string IpcTimeout = "IPC Timeout";
-            public const string LoadError = "Load Error";
-            public const string RegistryFallback = "Registry Fallback";
-            public const string StaticNotMeasured = "Static (Not Measured)";
-            public const string SkippedKnownUnstable = "Skipped (Known Unstable)";
-            public const string DisabledPendingRestart = "Disabled (Pending Restart)";
-            public const string EnabledPendingRestart = "Enabled (Pending Restart)";
+            public const BenchmarkStatus Unknown = BenchmarkStatus.Unknown;
+            public const BenchmarkStatus Ok = BenchmarkStatus.Ok;
+            public const BenchmarkStatus VerifiedViaHook = BenchmarkStatus.VerifiedViaHook;
+            public const BenchmarkStatus HookLoadedNoMenu = BenchmarkStatus.HookLoadedNoMenu;
+            public const BenchmarkStatus OrphanedMissingDll = BenchmarkStatus.OrphanedMissingDll;
+            public const BenchmarkStatus IpcTimeout = BenchmarkStatus.IpcTimeout;
+            public const BenchmarkStatus LoadError = BenchmarkStatus.LoadError;
+            public const BenchmarkStatus RegistryFallback = BenchmarkStatus.RegistryFallback;
+            public const BenchmarkStatus StaticNotMeasured = BenchmarkStatus.StaticNotMeasured;
+            public const BenchmarkStatus SkippedKnownUnstable = BenchmarkStatus.SkippedKnownUnstable;
+            public const BenchmarkStatus DisabledPendingRestart = BenchmarkStatus.DisabledPendingRestart;
+            public const BenchmarkStatus EnabledPendingRestart = BenchmarkStatus.EnabledPendingRestart;
         }
 
         public static class StatusToken
@@ -403,6 +419,14 @@ namespace ContextMenuProfiler.UI.Core
             return string.Equals(selectedCategory, resultCategory, StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsFallbackLikeStatus(BenchmarkStatus status)
+        {
+            return status == BenchmarkStatus.RegistryFallback
+                || status == BenchmarkStatus.LoadError
+                || status == BenchmarkStatus.OrphanedMissingDll
+                || status == BenchmarkStatus.IpcTimeout;
+        }
+
         public static bool IsFallbackLikeStatus(string? status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -410,10 +434,24 @@ namespace ContextMenuProfiler.UI.Core
                 return false;
             }
 
+            if (TryParseStatus(status, out BenchmarkStatus parsedStatus))
+            {
+                return IsFallbackLikeStatus(parsedStatus);
+            }
+
             return status.Contains(StatusToken.Fallback, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Error, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Orphaned, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Missing, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsWarningLikeStatus(BenchmarkStatus status)
+        {
+            return status == BenchmarkStatus.RegistryFallback
+                || status == BenchmarkStatus.HookLoadedNoMenu
+                || status == BenchmarkStatus.LoadError
+                || status == BenchmarkStatus.OrphanedMissingDll
+                || status == BenchmarkStatus.IpcTimeout;
         }
 
         public static bool IsWarningLikeStatus(string? status)
@@ -423,7 +461,12 @@ namespace ContextMenuProfiler.UI.Core
                 return false;
             }
 
-            return status.StartsWith(Status.LoadError, StringComparison.OrdinalIgnoreCase)
+            if (TryParseStatus(status, out BenchmarkStatus parsedStatus))
+            {
+                return IsWarningLikeStatus(parsedStatus);
+            }
+
+            return status.StartsWith(GetStatusDisplayText(BenchmarkStatus.LoadError), StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Exception, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Failed, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.NotRegistered, StringComparison.OrdinalIgnoreCase)
@@ -435,6 +478,12 @@ namespace ContextMenuProfiler.UI.Core
                 || status.Contains(StatusToken.Missing, StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsNotMeasuredLikeStatus(BenchmarkStatus status)
+        {
+            return status == BenchmarkStatus.StaticNotMeasured
+                || status == BenchmarkStatus.HookLoadedNoMenu;
+        }
+
         public static bool IsNotMeasuredLikeStatus(string? status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -442,9 +491,55 @@ namespace ContextMenuProfiler.UI.Core
                 return false;
             }
 
+            if (TryParseStatus(status, out BenchmarkStatus parsedStatus))
+            {
+                return IsNotMeasuredLikeStatus(parsedStatus);
+            }
+
             return status.Contains(StatusToken.NotMeasured, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Unsupported, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.NoMenu, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string GetStatusDisplayText(BenchmarkStatus status)
+        {
+            return status switch
+            {
+                BenchmarkStatus.Unknown => "Unknown",
+                BenchmarkStatus.Ok => "OK",
+                BenchmarkStatus.VerifiedViaHook => "Verified via Hook",
+                BenchmarkStatus.HookLoadedNoMenu => "Hook Loaded (No Menu)",
+                BenchmarkStatus.OrphanedMissingDll => "Orphaned / Missing DLL",
+                BenchmarkStatus.IpcTimeout => "IPC Timeout",
+                BenchmarkStatus.LoadError => "Load Error",
+                BenchmarkStatus.RegistryFallback => "Registry Fallback",
+                BenchmarkStatus.StaticNotMeasured => "Static (Not Measured)",
+                BenchmarkStatus.SkippedKnownUnstable => "Skipped (Known Unstable)",
+                BenchmarkStatus.DisabledPendingRestart => "Disabled (Pending Restart)",
+                BenchmarkStatus.EnabledPendingRestart => "Enabled (Pending Restart)",
+                _ => "Unknown"
+            };
+        }
+
+        public static bool TryParseStatus(string? status, out BenchmarkStatus parsedStatus)
+        {
+            parsedStatus = BenchmarkStatus.Unknown;
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return false;
+            }
+
+            foreach (BenchmarkStatus candidate in Enum.GetValues(typeof(BenchmarkStatus)))
+            {
+                if (string.Equals(status, GetStatusDisplayText(candidate), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(status, candidate.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    parsedStatus = candidate;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public static bool IsTimeoutLikeError(string? error)

@@ -17,7 +17,7 @@ namespace ContextMenuProfiler.UI.Core
     {
         public string Name { get; set; } = "";
         public Guid? Clsid { get; set; }
-        public string Status { get; set; } = BenchmarkSemantics.Status.Unknown;
+        public BenchmarkStatus Status { get; set; } = BenchmarkSemantics.Status.Unknown;
         public string Type { get; set; } = BenchmarkSemantics.Type.Com; // Legacy COM, UWP, Static
         public string? Path { get; set; }
         public List<RegistryHandlerInfo> RegistryEntries { get; set; } = new List<RegistryHandlerInfo>();

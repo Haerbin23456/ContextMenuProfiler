@@ -628,8 +628,8 @@ namespace ContextMenuProfiler.UI.ViewModels
                 }
 
                 item.Status = shouldEnable
-                    ? LocalizationService.Instance["Dashboard.Status.EnabledPendingRestart"]
-                    : LocalizationService.Instance["Dashboard.Status.DisabledPendingRestart"];
+                    ? BenchmarkSemantics.Status.EnabledPendingRestart
+                    : BenchmarkSemantics.Status.DisabledPendingRestart;
                 
                 UpdateStats();
              }

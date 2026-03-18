@@ -610,13 +610,13 @@ AssertTrue(
 
 string[] forbiddenStatusMagicLiterals =
 {
-    BenchmarkSemantics.Status.RegistryFallback,
-    BenchmarkSemantics.Status.LoadError,
-    BenchmarkSemantics.Status.OrphanedMissingDll,
-    BenchmarkSemantics.Status.IpcTimeout,
-    BenchmarkSemantics.Status.VerifiedViaHook,
-    BenchmarkSemantics.Status.HookLoadedNoMenu,
-    BenchmarkSemantics.Status.SkippedKnownUnstable
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.RegistryFallback),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.LoadError),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.OrphanedMissingDll),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.IpcTimeout),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.VerifiedViaHook),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.HookLoadedNoMenu),
+    BenchmarkSemantics.GetStatusDisplayText(BenchmarkSemantics.Status.SkippedKnownUnstable)
 };
 
 AssertSourceDoesNotContainAny(benchmarkServiceSource, "BenchmarkServiceNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
@@ -823,6 +823,6 @@ if (string.Equals(Environment.GetEnvironmentVariable("CMP_LIVE_PROBE"), "1", Str
     var service = new BenchmarkService();
     var results = await service.RunSystemBenchmarkAsync(ScanMode.Targeted);
     var measured = results.Count(r => r.TotalTime > 0);
-    var fallback = results.Count(r => string.Equals(r.Status, BenchmarkSemantics.Status.RegistryFallback, StringComparison.OrdinalIgnoreCase));
+    var fallback = results.Count(r => r.Status == BenchmarkSemantics.Status.RegistryFallback);
     Console.WriteLine($"Live probe: total={results.Count}, measured={measured}, fallback={fallback}");
 }

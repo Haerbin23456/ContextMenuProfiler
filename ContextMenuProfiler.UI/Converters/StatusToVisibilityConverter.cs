@@ -36,22 +36,39 @@ namespace ContextMenuProfiler.UI.Converters
 
             if (mode == StatusVisibilityMode.Fallback)
             {
-                string? statusStr = value as string;
-                bool isFallback = BenchmarkSemantics.IsFallbackLikeStatus(statusStr);
+                bool isFallback = value switch
+                {
+                    BenchmarkStatus statusValue => BenchmarkSemantics.IsFallbackLikeStatus(statusValue),
+                    string statusTextValue => BenchmarkSemantics.IsFallbackLikeStatus(statusTextValue),
+                    _ => false
+                };
                 return isFallback ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            if (value is string status)
+            if (value is BenchmarkStatus status)
             {
                 bool isWarning = BenchmarkSemantics.IsWarningLikeStatus(status);
-                
+
                 if (mode == StatusVisibilityMode.Inverse)
                 {
                     return isWarning ? Visibility.Collapsed : Visibility.Visible;
                 }
-                
+
                 return isWarning ? Visibility.Visible : Visibility.Collapsed;
             }
+
+            if (value is string statusText)
+            {
+                bool isWarning = BenchmarkSemantics.IsWarningLikeStatus(statusText);
+
+                if (mode == StatusVisibilityMode.Inverse)
+                {
+                    return isWarning ? Visibility.Collapsed : Visibility.Visible;
+                }
+
+                return isWarning ? Visibility.Visible : Visibility.Collapsed;
+            }
+
             return Visibility.Collapsed;
         }
 
