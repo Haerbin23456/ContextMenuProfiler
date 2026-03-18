@@ -351,13 +351,13 @@ AssertTrue(
 
 string[] forbiddenStatusMagicLiterals =
 {
-    "Registry Fallback",
-    "Load Error",
-    "Orphaned / Missing DLL",
-    "IPC Timeout",
-    "Verified via Hook",
-    "Hook Loaded (No Menu)",
-    "Skipped (Known Unstable)"
+    BenchmarkSemantics.Status.RegistryFallback,
+    BenchmarkSemantics.Status.LoadError,
+    BenchmarkSemantics.Status.OrphanedMissingDll,
+    BenchmarkSemantics.Status.IpcTimeout,
+    BenchmarkSemantics.Status.VerifiedViaHook,
+    BenchmarkSemantics.Status.HookLoadedNoMenu,
+    BenchmarkSemantics.Status.SkippedKnownUnstable
 };
 
 AssertSourceDoesNotContainAny(benchmarkServiceSource, "BenchmarkServiceNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
@@ -367,11 +367,11 @@ AssertSourceDoesNotContainAny(statusVisibilityConverterSource, "StatusVisibility
 
 string[] forbiddenDetailedStatusLiterals =
 {
-    "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
-    "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.",
-    "The extension was loaded by the Hook service but it did not provide any context menu items for the test context.",
-    "Hook service response timed out for this extension. Data is based on registry scan only.",
-    "The Hook service could not be reached or failed to process this extension. Data is based on registry scan only."
+    resources["en-US"]["Dashboard.Detail.StaticNotMeasured"],
+    resources["en-US"]["Dashboard.Detail.SkippedKnownUnstable"],
+    resources["en-US"]["Dashboard.Detail.HookLoadedNoMenu"],
+    resources["en-US"]["Dashboard.Detail.HookResponseTimeoutFallback"],
+    resources["en-US"]["Dashboard.Detail.HookUnavailableFallback"]
 };
 
 AssertSourceDoesNotContainAny(
