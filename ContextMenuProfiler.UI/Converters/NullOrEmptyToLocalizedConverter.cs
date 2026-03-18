@@ -1,3 +1,4 @@
+using ContextMenuProfiler.UI.Core;
 using ContextMenuProfiler.UI.Core.Services;
 using System;
 using System.Globalization;
@@ -12,6 +13,11 @@ namespace ContextMenuProfiler.UI.Converters
             string text = value?.ToString() ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(text))
             {
+                if (string.Equals(text, BenchmarkSemantics.IconSource.ManifestAppLogo, StringComparison.Ordinal))
+                {
+                    return LocalizationService.Instance["Dashboard.Value.ManifestAppLogo"];
+                }
+
                 return text;
             }
 

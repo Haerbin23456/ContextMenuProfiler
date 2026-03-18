@@ -129,7 +129,9 @@ namespace ContextMenuProfiler.UI.Core
                 IconLocation = !string.IsNullOrEmpty(logoPath) ? $"{logoPath}|{binaryPath}" : logoPath,
                 PackageName = package.Id.Name,
                 Version = $"{package.Id.Version.Major}.{package.Id.Version.Minor}.{package.Id.Version.Build}",
-                IconSource = !string.IsNullOrEmpty(logoPath) ? "Manifest (App Logo)" : "None"
+                IconSource = !string.IsNullOrEmpty(logoPath)
+                    ? BenchmarkSemantics.IconSource.ManifestAppLogo
+                    : null
             };
 
             return true;

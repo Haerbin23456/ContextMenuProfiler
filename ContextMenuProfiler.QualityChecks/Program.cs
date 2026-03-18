@@ -141,7 +141,8 @@ string[] criticalKeys =
     "Dashboard.ScanSystem",
     "Dashboard.AnalyzeFile",
     "Dashboard.Status.ScanComplete",
-    "Dashboard.Value.UnknownWithClsid"
+    "Dashboard.Value.UnknownWithClsid",
+    "Dashboard.Value.ManifestAppLogo"
 };
 
 foreach (var key in criticalKeys)
@@ -159,6 +160,7 @@ string registryScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\Registry
 string packageScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
 string dashboardViewModelSource = ReadSource(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
 string registryPathHelperSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
+string nullOrEmptyConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\NullOrEmptyToLocalizedConverter.cs");
 string statusVisibilityConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
 string typeToIconConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\TypeToIconConverter.cs");
 string dashboardPageXamlSource = ReadSource(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
@@ -235,6 +237,12 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("public static class IconSource", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("ManifestAppLogo = \"ManifestAppLogo\"", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesIconSourceMarkers"
+);
+
+AssertTrue(
     registryScannerSource.Contains("BenchmarkSemantics.RegistryLocationLabel.AllFiles", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
@@ -281,6 +289,19 @@ AssertTrue(
     && !packageScannerSource.Contains("\"directory\\\\background\"", StringComparison.Ordinal)
     && !packageScannerSource.Contains("type == \"*\"", StringComparison.Ordinal),
     "PackageScannerNoInlineAssociationTypeLiterals"
+);
+
+AssertTrue(
+    packageScannerSource.Contains("BenchmarkSemantics.IconSource.ManifestAppLogo", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"Manifest (App Logo)\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"None\"", StringComparison.Ordinal),
+    "PackageScannerUsesIconSourceSemantics"
+);
+
+AssertTrue(
+    nullOrEmptyConverterSource.Contains("BenchmarkSemantics.IconSource.ManifestAppLogo", StringComparison.Ordinal)
+    && nullOrEmptyConverterSource.Contains("Dashboard.Value.ManifestAppLogo", StringComparison.Ordinal),
+    "NullOrEmptyConverterMapsIconSourceMarkerLocalization"
 );
 
 AssertTrue(

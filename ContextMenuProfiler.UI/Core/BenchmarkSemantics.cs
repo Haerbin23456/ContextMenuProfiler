@@ -178,6 +178,11 @@ namespace ContextMenuProfiler.UI.Core
             public const string Skipped = "Skipped";
         }
 
+        public static class IconSource
+        {
+            public const string ManifestAppLogo = "ManifestAppLogo";
+        }
+
         public static class LocationSummary
         {
             public const string ModernShellUwp = "Modern Shell (UWP)";
