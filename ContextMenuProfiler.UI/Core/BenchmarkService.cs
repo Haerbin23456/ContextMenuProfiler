@@ -172,7 +172,7 @@ namespace ContextMenuProfiler.UI.Core
                         Location = $"Registry (Shell) - {p.Split('\\')[0]}"
                     }).ToList(),
                     InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
-                    DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
+                    DetailedStatus = LocalizationService.Instance["Dashboard.Detail.StaticNotMeasured"],
                     TotalTime = 0,
                     Category = BenchmarkSemantics.Category.Static
                 };
@@ -217,7 +217,7 @@ namespace ContextMenuProfiler.UI.Core
             if (SkipKnownUnstableHandlers && IsKnownUnstableHandler(result))
             {
                 result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
-                result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
+                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.SkippedKnownUnstable"];
                 result.InterfaceType = BenchmarkSemantics.InterfaceType.Skipped;
                 result.CreateTime = 0;
                 result.InitTime = 0;
@@ -230,7 +230,9 @@ namespace ContextMenuProfiler.UI.Core
             if (!string.IsNullOrEmpty(result.BinaryPath) && !File.Exists(result.BinaryPath))
             {
                 result.Status = BenchmarkSemantics.Status.OrphanedMissingDll;
-                result.DetailedStatus = $"The file '{result.BinaryPath}' was not found on disk. This extension is likely corrupted or uninstalled.";
+                result.DetailedStatus = string.Format(
+                    LocalizationService.Instance["Dashboard.Detail.OrphanedMissingDll"],
+                    result.BinaryPath);
             }
 
             var hookCall = await HookIpcClient.GetHookDataAsync(result.Clsid.Value.ToString("B"), contextPath, result.BinaryPath);
@@ -255,7 +257,7 @@ namespace ContextMenuProfiler.UI.Core
                 else if (result.Status == BenchmarkSemantics.Status.Unknown || result.Status == BenchmarkSemantics.Status.Ok)
                 {
                     result.Status = BenchmarkSemantics.Status.HookLoadedNoMenu;
-                    result.DetailedStatus = "The extension was loaded by the Hook service but it did not provide any context menu items for the test context.";
+                    result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookLoadedNoMenu"];
                 }
                 
                 string? winnerIcon = null;
@@ -273,15 +275,21 @@ namespace ContextMenuProfiler.UI.Core
             }
             else if (hookData != null && !hookData.success)
             {
+                string hookError = hookData.error ?? LocalizationService.Instance["Dashboard.Value.Unknown"];
+
                 if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
                 {
                     result.Status = BenchmarkSemantics.Status.IpcTimeout;
-                    result.DetailedStatus = $"Hook service timed out while probing this extension. Error: {hookData.error}";
+                    result.DetailedStatus = string.Format(
+                        LocalizationService.Instance["Dashboard.Detail.HookProbeTimeoutWithError"],
+                        hookError);
                 }
                 else
                 {
                     result.Status = BenchmarkSemantics.Status.LoadError;
-                    result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
+                    result.DetailedStatus = string.Format(
+                        LocalizationService.Instance["Dashboard.Detail.HookLoadErrorWithError"],
+                        hookError);
                 }
             }
             else if (hookData == null)
@@ -291,12 +299,12 @@ namespace ContextMenuProfiler.UI.Core
                     if (hookCall.roundtrip_ms >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
                     {
                         result.Status = BenchmarkSemantics.Status.IpcTimeout;
-                        result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";
+                        result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"];
                     }
                     else
                     {
                         result.Status = BenchmarkSemantics.Status.RegistryFallback;
-                        result.DetailedStatus = "The Hook service could not be reached or failed to process this extension. Data is based on registry scan only.";
+                        result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"];
                     }
                 }
             }

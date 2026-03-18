@@ -266,6 +266,41 @@ AssertSourceDoesNotContainAny(packageScannerSource, "PackageScannerNoStatusMagic
 AssertSourceDoesNotContainAny(dashboardViewModelSource, "DashboardViewModelNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 AssertSourceDoesNotContainAny(statusVisibilityConverterSource, "StatusVisibilityConverterNoStatusMagicLiterals", forbiddenStatusMagicLiterals);
 
+string[] forbiddenDetailedStatusLiterals =
+{
+    "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
+    "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.",
+    "The extension was loaded by the Hook service but it did not provide any context menu items for the test context.",
+    "Hook service response timed out for this extension. Data is based on registry scan only.",
+    "The Hook service could not be reached or failed to process this extension. Data is based on registry scan only."
+};
+
+AssertSourceDoesNotContainAny(
+    benchmarkServiceSource,
+    "BenchmarkServiceNoHardcodedDetailedStatusLiterals",
+    forbiddenDetailedStatusLiterals
+);
+
+string[] requiredDetailLocalizationKeysInBenchmarkService =
+{
+    "Dashboard.Detail.StaticNotMeasured",
+    "Dashboard.Detail.SkippedKnownUnstable",
+    "Dashboard.Detail.OrphanedMissingDll",
+    "Dashboard.Detail.HookLoadedNoMenu",
+    "Dashboard.Detail.HookProbeTimeoutWithError",
+    "Dashboard.Detail.HookLoadErrorWithError",
+    "Dashboard.Detail.HookResponseTimeoutFallback",
+    "Dashboard.Detail.HookUnavailableFallback"
+};
+
+foreach (var key in requiredDetailLocalizationKeysInBenchmarkService)
+{
+    AssertTrue(
+        benchmarkServiceSource.Contains($"[\"{key}\"]", StringComparison.Ordinal),
+        $"BenchmarkServiceUsesLocalizedDetailKey:{key}"
+    );
+}
+
 string[] forbiddenInterfaceAndLocationLiterals =
 {
     "Static Verb",
