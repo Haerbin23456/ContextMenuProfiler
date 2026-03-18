@@ -27,6 +27,36 @@ namespace ContextMenuProfiler.UI.Core
 
     public class RegistryScanner
     {
+        private static readonly (string Path, string Location)[] GlobalHandlerLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles))
+        };
+
+        private static readonly (string Path, string Location)[] DirectoryScopedHandlerLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory)),
+            (BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder),
+            (BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive),
+            (BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+            (BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground)
+        };
+
+        private static readonly (string Path, string Location)[] GlobalShellLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles)
+        };
+
+        private static readonly (string Path, string Location)[] DirectoryScopedShellLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+            (BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive),
+            (BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder)
+        };
+
         private readonly struct TargetAssociationContext
         {
             public TargetAssociationContext(bool isDirectory, string associationType)
@@ -43,24 +73,8 @@ namespace ContextMenuProfiler.UI.Core
         {
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
 
-            // 1. Scan Global Locations (Fast & Essential)
-            var commonLocations = new[]
-            {
-                (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
-                (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles)),
-                (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory),
-                (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory)),
-                (BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder),
-                (BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive),
-                (BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects),
-                (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
-                (BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground)
-            };
-
-            foreach (var loc in commonLocations)
-            {
-                ScanLocation(handlers, loc.Item1, loc.Item2);
-            }
+            ScanHandlerLocations(handlers, GlobalHandlerLocations);
+            ScanHandlerLocations(handlers, DirectoryScopedHandlerLocations);
 
             // 2. Scan Extensions (Only if Full mode)
             if (mode == ScanMode.Full)
@@ -104,18 +118,11 @@ namespace ContextMenuProfiler.UI.Core
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
             var context = ResolveTargetAssociationContext(targetPath);
 
-            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
-            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles));
+            ScanHandlerLocations(handlers, GlobalHandlerLocations);
 
             if (context.IsDirectory)
             {
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory));
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground);
+                ScanHandlerLocations(handlers, DirectoryScopedHandlerLocations);
                 return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
             }
 
@@ -206,20 +213,8 @@ namespace ContextMenuProfiler.UI.Core
         {
             var verbs = new ConcurrentDictionary<string, List<string>>();
 
-            // 1. Scan Global Locations
-            var shellLocations = new[]
-            {
-                (BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
-                (BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory),
-                (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
-                (BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive),
-                (BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder)
-            };
-
-            foreach (var loc in shellLocations)
-            {
-                ScanShellKey(verbs, loc.Item1, loc.Item2);
-            }
+            ScanShellLocations(verbs, GlobalShellLocations);
+            ScanShellLocations(verbs, DirectoryScopedShellLocations);
 
             return new Dictionary<string, List<string>>(verbs);
         }
@@ -229,14 +224,11 @@ namespace ContextMenuProfiler.UI.Core
             var verbs = new ConcurrentDictionary<string, List<string>>();
             var context = ResolveTargetAssociationContext(targetPath);
 
-            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
+            ScanShellLocations(verbs, GlobalShellLocations);
 
             if (context.IsDirectory)
             {
-                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory);
-                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
-                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive);
-                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder);
+                ScanShellLocations(verbs, DirectoryScopedShellLocations);
                 return new Dictionary<string, List<string>>(verbs);
             }
 
@@ -253,6 +245,26 @@ namespace ContextMenuProfiler.UI.Core
                 : Path.GetExtension(targetPath).ToLowerInvariant();
 
             return new TargetAssociationContext(isDirectory, associationType);
+        }
+
+        private static void ScanHandlerLocations(
+            ConcurrentDictionary<Guid, List<RegistryHandlerInfo>> handlers,
+            IEnumerable<(string Path, string Location)> locations)
+        {
+            foreach (var location in locations)
+            {
+                ScanLocation(handlers, location.Path, location.Location);
+            }
+        }
+
+        private static void ScanShellLocations(
+            ConcurrentDictionary<string, List<string>> verbs,
+            IEnumerable<(string Path, string Location)> locations)
+        {
+            foreach (var location in locations)
+            {
+                ScanShellKey(verbs, location.Path, location.Location);
+            }
         }
 
         private static void ScanFileAssociationHandlers(ConcurrentDictionary<Guid, List<RegistryHandlerInfo>> handlers, string extension)

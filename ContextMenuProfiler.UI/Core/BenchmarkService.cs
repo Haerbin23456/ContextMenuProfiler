@@ -101,6 +101,21 @@ namespace ContextMenuProfiler.UI.Core
             var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
             var semaphore = new SemaphoreSlim(BenchmarkSemantics.Runtime.MaxParallelProbeTasks);
 
+            await ProcessComHandlersAsync(registryHandlers, hookContextPath, allResults, resultsMap, semaphore, progress);
+            ProcessStaticVerbEntries(staticVerbs, allResults, progress);
+            await ProcessPackagedExtensionsAsync(packageTargetPath, hookContextPath, allResults, resultsMap, semaphore, progress);
+
+            return allResults.ToList();
+        }
+
+        private async Task ProcessComHandlersAsync(
+            Dictionary<Guid, List<RegistryHandlerInfo>> registryHandlers,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
+            SemaphoreSlim semaphore,
+            IProgress<BenchmarkResult>? progress)
+        {
             var comTasks = registryHandlers.Select(clsidEntry =>
                 RunWithSemaphoreAsync(semaphore, async () =>
                 {
@@ -141,7 +156,13 @@ namespace ContextMenuProfiler.UI.Core
                 }));
 
             await Task.WhenAll(comTasks);
+        }
 
+        private void ProcessStaticVerbEntries(
+            Dictionary<string, List<string>> staticVerbs,
+            ConcurrentBag<BenchmarkResult> allResults,
+            IProgress<BenchmarkResult>? progress)
+        {
             foreach (var verbEntry in staticVerbs)
             {
                 var verbResult = CreateStaticVerbResult(verbEntry.Key, verbEntry.Value);
@@ -152,7 +173,16 @@ namespace ContextMenuProfiler.UI.Core
 
                 AddAndReportResult(allResults, verbResult, progress);
             }
+        }
 
+        private async Task ProcessPackagedExtensionsAsync(
+            string? packageTargetPath,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
+            SemaphoreSlim semaphore,
+            IProgress<BenchmarkResult>? progress)
+        {
             var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
                 .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
                 .Select(uwpResult =>
@@ -168,8 +198,6 @@ namespace ContextMenuProfiler.UI.Core
                     }));
 
             await Task.WhenAll(uwpTasks);
-
-            return allResults.ToList();
         }
 
         private static async Task RunWithSemaphoreAsync(SemaphoreSlim semaphore, Func<Task> action)
