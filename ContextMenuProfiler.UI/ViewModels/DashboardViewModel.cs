@@ -706,7 +706,8 @@ namespace ContextMenuProfiler.UI.ViewModels
                             LocalizationService.Instance["Dashboard.Notify.CopySuccess.Message"]);
                         return;
                     }
-                    catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.ErrorCode == 0x800401D0)
+                    catch (System.Runtime.InteropServices.COMException ex)
+                        when ((uint)ex.ErrorCode == BenchmarkSemantics.Runtime.ClipboardCantOpenHResult)
                     {
                         // CLIPBRD_E_CANT_OPEN - Wait and retry
                         await Task.Delay(BenchmarkSemantics.Runtime.ClipboardRetryDelayMs);

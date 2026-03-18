@@ -169,7 +169,8 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("IpcTimeoutLikeRoundtripThresholdMs = 1900", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("HookReconnectStabilizationDelayMs = 1000", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("ClipboardRetryAttempts = 5", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("ClipboardRetryDelayMs = 100", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("ClipboardRetryDelayMs = 100", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("ClipboardCantOpenHResult = 0x800401D0", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRuntimeProbeConstants"
 );
 
@@ -232,14 +233,16 @@ AssertTrue(
 AssertTrue(
     dashboardViewModelSource.Contains("BenchmarkSemantics.Runtime.HookReconnectStabilizationDelayMs", StringComparison.Ordinal)
     && dashboardViewModelSource.Contains("BenchmarkSemantics.Runtime.ClipboardRetryAttempts", StringComparison.Ordinal)
-    && dashboardViewModelSource.Contains("BenchmarkSemantics.Runtime.ClipboardRetryDelayMs", StringComparison.Ordinal),
+    && dashboardViewModelSource.Contains("BenchmarkSemantics.Runtime.ClipboardRetryDelayMs", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("BenchmarkSemantics.Runtime.ClipboardCantOpenHResult", StringComparison.Ordinal),
     "DashboardViewModelUsesRuntimeRetryTimingConstants"
 );
 
 AssertTrue(
     !dashboardViewModelSource.Contains("Task.Delay(1000)", StringComparison.Ordinal)
     && !dashboardViewModelSource.Contains("for (int i = 0; i < 5; i++)", StringComparison.Ordinal)
-    && !dashboardViewModelSource.Contains("Task.Delay(100)", StringComparison.Ordinal),
+    && !dashboardViewModelSource.Contains("Task.Delay(100)", StringComparison.Ordinal)
+    && !dashboardViewModelSource.Contains("0x800401D0", StringComparison.Ordinal),
     "DashboardViewModelNoInlineRetryTimingLiterals"
 );
 

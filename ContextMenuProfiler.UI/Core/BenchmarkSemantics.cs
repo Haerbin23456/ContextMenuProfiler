@@ -101,6 +101,7 @@ namespace ContextMenuProfiler.UI.Core
             public const int HookReconnectStabilizationDelayMs = 1000;
             public const int ClipboardRetryAttempts = 5;
             public const int ClipboardRetryDelayMs = 100;
+            public const uint ClipboardCantOpenHResult = 0x800401D0;
         }
 
         public static bool IsPackagedExtensionType(string? type)
