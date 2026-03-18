@@ -141,47 +141,23 @@ namespace ContextMenuProfiler.UI.Core
                     if (key == null) return;
                     foreach (var subKeyName in key.GetSubKeyNames())
                     {
+                        if (!TryResolveClsid(key, subKeyName, out Guid clsid) || clsid == Guid.Empty)
+                        {
+                            continue;
+                        }
+
                         string trimmedName = subKeyName.Trim();
-                        Guid clsid = Guid.Empty;
-                        bool found = false;
+                        var info = new RegistryHandlerInfo {
+                            Path = $@"{subKeyPath}\{subKeyName}",
+                            Location = BenchmarkSemantics.BuildRegistryHandlerLocation(locationName, trimmedName)
+                        };
 
-                        // Pattern 1: Key name is the CLSID (e.g. {GUID})
-                        if (BenchmarkSemantics.LooksLikeBracedClsid(trimmedName) && Guid.TryParse(trimmedName, out clsid))
+                        var list = handlers.GetOrAdd(clsid, _ => new List<RegistryHandlerInfo>());
+                        lock (list)
                         {
-                            found = true;
-                        }
-
-                        // Pattern 2: Default value is the CLSID
-                        if (!found)
-                        {
-                            using (var subKey = key.OpenSubKey(subKeyName))
+                            if (!list.Any(i => i.Path == info.Path))
                             {
-                                object? val = subKey?.GetValue("");
-                                if (val is string guidStr)
-                                {
-                                    string trimmedGuid = guidStr.Trim();
-                                    if (BenchmarkSemantics.LooksLikeBracedClsid(trimmedGuid) && Guid.TryParse(trimmedGuid, out clsid))
-                                    {
-                                        found = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (found && clsid != Guid.Empty)
-                        {
-                            var info = new RegistryHandlerInfo { 
-                                Path = $@"{subKeyPath}\{subKeyName}",
-                                Location = BenchmarkSemantics.BuildRegistryHandlerLocation(locationName, trimmedName)
-                            };
-
-                            var list = handlers.GetOrAdd(clsid, _ => new List<RegistryHandlerInfo>());
-                            lock (list)
-                            {
-                                if (!list.Any(i => i.Path == info.Path))
-                                {
-                                    list.Add(info);
-                                }
+                                list.Add(info);
                             }
                         }
                     }
@@ -191,6 +167,31 @@ namespace ContextMenuProfiler.UI.Core
             {
                 LogService.Instance.Error($"ScanLocation failed for {subKeyPath}", ex);
             }
+        }
+
+        private static bool TryResolveClsid(RegistryKey parentKey, string subKeyName, out Guid clsid)
+        {
+            if (TryParseBracedClsid(subKeyName, out clsid))
+            {
+                return true;
+            }
+
+            using var subKey = parentKey.OpenSubKey(subKeyName);
+            string? guidStr = subKey?.GetValue("") as string;
+            return TryParseBracedClsid(guidStr, out clsid);
+        }
+
+        private static bool TryParseBracedClsid(string? value, out Guid clsid)
+        {
+            clsid = Guid.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string trimmed = value.Trim();
+            return BenchmarkSemantics.LooksLikeBracedClsid(trimmed)
+                && Guid.TryParse(trimmed, out clsid);
         }
 
         private static string? GetProgID(string ext)
