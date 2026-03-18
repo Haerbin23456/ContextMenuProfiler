@@ -153,6 +153,7 @@ foreach (var key in criticalKeys)
 
 string benchmarkServiceSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
 string benchmarkSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
+string comRegistrySemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\ComRegistrySemantics.cs");
 string packageManifestSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageManifestSemantics.cs");
 string benchmarkStatisticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
 string hookIpcClientSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
@@ -255,6 +256,16 @@ AssertTrue(
     && packageManifestSemanticsSource.Contains("ContextMenuCategory = \"windows.fileExplorerContextMenus\"", StringComparison.Ordinal)
     && packageManifestSemanticsSource.Contains("BuildPackagedComClassIndexPath", StringComparison.Ordinal),
     "PackageManifestSemanticsDefinesManifestTokens"
+);
+
+AssertTrue(
+    comRegistrySemanticsSource.Contains("public static class ComRegistrySemantics", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("FriendlyNameValueName = \"FriendlyName\"", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("InprocServer32SubKeyName = \"InprocServer32\"", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("BuildPackagedComClassIndexPath", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("BuildPackageRepositoryPath", StringComparison.Ordinal)
+    && comRegistrySemanticsSource.Contains("ExtractPackageIdPrefix", StringComparison.Ordinal),
+    "ComRegistrySemanticsDefinesRegistryMetadataTokens"
 );
 
 AssertTrue(
@@ -463,6 +474,30 @@ AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command)", StringComparison.Ordinal)
     && !benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal),
     "BenchmarkServiceUsesStaticVerbKeyParser"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("ComRegistrySemantics.FriendlyNameValueName", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("ComRegistrySemantics.InprocServer32SubKeyName", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("ComRegistrySemantics.BuildPackagedComClassIndexPath", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("ComRegistrySemantics.BuildPackageRepositoryPath", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("ComRegistrySemantics.ExtractPackageIdPrefix", StringComparison.Ordinal),
+    "BenchmarkServiceUsesComRegistrySemantics"
+);
+
+AssertTrue(
+    !benchmarkServiceSource.Contains("key.GetValue(\"FriendlyName\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("OpenSubKey(\"InprocServer32\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("OpenSubKey(\"TreatAs\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("key.GetValue(\"AppID\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("GetValue(\"DllSurrogate\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("\"dllhost.exe\"", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("@\"PackagedCom\\ClassIndex\\", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("@\"PackagedCom\\Package\"", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("GetValue(\"DisplayName\")", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("Split('_')[0]", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("GetValue(\"DllPath\")", StringComparison.Ordinal),
+    "BenchmarkServiceNoInlineComRegistryMetadataLiterals"
 );
 
 AssertTrue(

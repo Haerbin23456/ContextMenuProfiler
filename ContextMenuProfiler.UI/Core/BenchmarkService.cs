@@ -353,22 +353,22 @@ namespace ContextMenuProfiler.UI.Core
                 if (key != null)
                 {
                     meta.Name = key.GetValue("") as string ?? "";
-                    meta.FriendlyName = key.GetValue("FriendlyName") as string ?? "";
+                    meta.FriendlyName = key.GetValue(ComRegistrySemantics.FriendlyNameValueName) as string ?? "";
 
                     // Try InprocServer32
-                    using (var serverKey = key.OpenSubKey("InprocServer32"))
+                    using (var serverKey = key.OpenSubKey(ComRegistrySemantics.InprocServer32SubKeyName))
                     {
                         if (serverKey != null)
                         {
                             meta.BinaryPath = serverKey.GetValue("") as string ?? "";
-                            meta.ThreadingModel = serverKey.GetValue("ThreadingModel") as string ?? "";
+                            meta.ThreadingModel = serverKey.GetValue(ComRegistrySemantics.ThreadingModelValueName) as string ?? "";
                         }
                     }
 
                     // If no path, check TreatAs (Alias)
                     if (string.IsNullOrEmpty(meta.BinaryPath))
                     {
-                        string? treatAs = key.OpenSubKey("TreatAs")?.GetValue("") as string;
+                        string? treatAs = key.OpenSubKey(ComRegistrySemantics.TreatAsSubKeyName)?.GetValue("") as string;
                         if (!string.IsNullOrEmpty(treatAs) && Guid.TryParse(treatAs, out Guid otherGuid) && otherGuid != clsid)
                         {
                             var otherMeta = QueryClsidMetadata(otherGuid, depth + 1);
@@ -381,14 +381,14 @@ namespace ContextMenuProfiler.UI.Core
                     // If still no path, check AppID (Surrogates)
                     if (string.IsNullOrEmpty(meta.BinaryPath))
                     {
-                        string? appId = key.GetValue("AppID") as string;
+                        string? appId = key.GetValue(ComRegistrySemantics.AppIdValueName) as string;
                         if (!string.IsNullOrEmpty(appId))
                         {
-                            using (var appKey = Registry.ClassesRoot.OpenSubKey($@"AppID\{appId}"))
+                            using (var appKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildAppIdPath(appId)))
                             {
-                                string? dllSurrogate = appKey?.GetValue("DllSurrogate") as string;
+                                string? dllSurrogate = appKey?.GetValue(ComRegistrySemantics.DllSurrogateValueName) as string;
                                 meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate) 
-                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "dllhost.exe")
+                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), ComRegistrySemantics.DllHostExecutableName)
                                     : (dllSurrogate ?? "");
                             }
                         }
@@ -397,7 +397,7 @@ namespace ContextMenuProfiler.UI.Core
                 else
                 {
                     // Check Packaged COM
-                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\ClassIndex\{clsidB}"))
+                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB)))
                     {
                         string? packageFullName = pkgKey?.GetValue("") as string;
                         if (!string.IsNullOrEmpty(packageFullName))
@@ -420,14 +420,14 @@ namespace ContextMenuProfiler.UI.Core
         {
             try
             {
-                using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\Package"))
+                using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.PackagedComPackagePrefix))
                 {
                     if (pkgKey == null) return null;
                     foreach (var pkgName in pkgKey.GetSubKeyNames())
                     {
-                        using (var clsKey = pkgKey.OpenSubKey($@"{pkgName}\Class\{clsidB}"))
+                        using (var clsKey = pkgKey.OpenSubKey(ComRegistrySemantics.BuildPackagedComPackageClassPath(pkgName, clsidB)))
                         {
-                            string? name = clsKey?.GetValue("DisplayName") as string;
+                            string? name = clsKey?.GetValue(ComRegistrySemantics.DisplayNameValueName) as string;
                             if (!string.IsNullOrEmpty(name)) return name;
                         }
                     }
@@ -481,15 +481,15 @@ namespace ContextMenuProfiler.UI.Core
             try
             {
                 // Look up package installation path
-                using (var key = Registry.ClassesRoot.OpenSubKey($@"Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\PackageRepository\Packages\{packageFullName}"))
+                using (var key = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackageRepositoryPath(packageFullName)))
                 {
-                    string? installPath = key?.GetValue("Path") as string;
+                    string? installPath = key?.GetValue(ComRegistrySemantics.PackageInstallPathValueName) as string;
                     if (string.IsNullOrEmpty(installPath)) return null;
 
                     // Now find the relative DLL path from PackagedCom\Package
                     // We need the short name (Package Family Name or part of full name)
-                    string packageId = packageFullName.Split('_')[0];
-                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\Package"))
+                    string packageId = ComRegistrySemantics.ExtractPackageIdPrefix(packageFullName);
+                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.PackagedComPackagePrefix))
                     {
                         if (pkgKey != null)
                         {
@@ -497,9 +497,9 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 if (name.StartsWith(packageId, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    using (var clsKey = pkgKey.OpenSubKey($@"{name}\Class\{clsid:B}"))
+                                    using (var clsKey = pkgKey.OpenSubKey(ComRegistrySemantics.BuildPackagedComPackageClassPath(name, clsid.ToString("B"))))
                                     {
-                                        string? relDllPath = clsKey?.GetValue("DllPath") as string;
+                                        string? relDllPath = clsKey?.GetValue(ComRegistrySemantics.DllPathValueName) as string;
                                         if (!string.IsNullOrEmpty(relDllPath))
                                         {
                                             return Path.Combine(installPath, relDllPath);
