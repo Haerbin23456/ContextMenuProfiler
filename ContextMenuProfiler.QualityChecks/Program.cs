@@ -210,7 +210,13 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("BuildRegistryHandlerLocation", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("BuildRegistryHandlerLocation", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static class RegistryPathPattern", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("AllFilesHandlers = @\"*\\shellex\\ContextMenuHandlers\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildSystemFileAssociationHandlers", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildProgIdHandlers", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildSystemFileAssociationShell", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildProgIdShell", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRegistryScannerLocationHelpers"
 );
 
@@ -229,6 +235,12 @@ AssertTrue(
     && registryScannerSource.Contains("BenchmarkSemantics.BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildRegistryHandlerLocation", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.AllFilesShell", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.CommandSubKeyName", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.MuiVerbValueName", StringComparison.Ordinal)
@@ -241,6 +253,9 @@ AssertTrue(
     && !registryScannerSource.Contains("\"Directory [Disabled]\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"Extension (", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"ProgID (", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("@\"*\\shellex\\ContextMenuHandlers\"", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("@\"Directory\\shell\"", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("SystemFileAssociations\\", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"Attributes\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"AnyCode\"", StringComparison.Ordinal),
     "RegistryScannerNoInlineLocationLabelLiterals"

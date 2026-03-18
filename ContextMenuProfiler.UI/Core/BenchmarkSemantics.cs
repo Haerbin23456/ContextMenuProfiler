@@ -114,6 +114,47 @@ namespace ContextMenuProfiler.UI.Core
             public const string ProgId = "ProgID";
         }
 
+        public static class RegistryPathPattern
+        {
+            public const string AllFilesHandlers = @"*\shellex\ContextMenuHandlers";
+            public const string AllFilesHandlersDisabled = @"*\shellex\-ContextMenuHandlers";
+            public const string DirectoryHandlers = @"Directory\shellex\ContextMenuHandlers";
+            public const string DirectoryHandlersDisabled = @"Directory\shellex\-ContextMenuHandlers";
+            public const string FolderHandlers = @"Folder\shellex\ContextMenuHandlers";
+            public const string DriveHandlers = @"Drive\shellex\ContextMenuHandlers";
+            public const string AllFileSystemObjectsHandlers = @"AllFileSystemObjects\shellex\ContextMenuHandlers";
+            public const string DirectoryBackgroundHandlers = @"Directory\Background\shellex\ContextMenuHandlers";
+            public const string DesktopBackgroundHandlers = @"DesktopBackground\shellex\ContextMenuHandlers";
+
+            public const string AllFilesShell = @"*\shell";
+            public const string DirectoryShell = @"Directory\shell";
+            public const string DirectoryBackgroundShell = @"Directory\Background\shell";
+            public const string DriveShell = @"Drive\shell";
+            public const string FolderShell = @"Folder\shell";
+
+            public static string BuildSystemFileAssociationHandlers(string extension, bool disabled)
+            {
+                string handlerKey = disabled ? "-ContextMenuHandlers" : "ContextMenuHandlers";
+                return $@"SystemFileAssociations\{extension}\shellex\{handlerKey}";
+            }
+
+            public static string BuildProgIdHandlers(string progId, bool disabled)
+            {
+                string handlerKey = disabled ? "-ContextMenuHandlers" : "ContextMenuHandlers";
+                return $@"{progId}\shellex\{handlerKey}";
+            }
+
+            public static string BuildSystemFileAssociationShell(string extension)
+            {
+                return $@"SystemFileAssociations\{extension}\shell";
+            }
+
+            public static string BuildProgIdShell(string progId)
+            {
+                return $@"{progId}\shell";
+            }
+        }
+
         public static class InterfaceType
         {
             public const string StaticVerb = "Static Verb";

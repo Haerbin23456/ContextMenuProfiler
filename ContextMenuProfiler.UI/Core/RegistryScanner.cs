@@ -34,15 +34,15 @@ namespace ContextMenuProfiler.UI.Core
             // 1. Scan Global Locations (Fast & Essential)
             var commonLocations = new[]
             {
-                (@"*\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.AllFiles),
-                (@"*\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles)),
-                (@"Directory\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Directory),
-                (@"Directory\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory)),
-                (@"Folder\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Folder),
-                (@"Drive\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Drive),
-                (@"AllFileSystemObjects\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects),
-                (@"Directory\Background\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
-                (@"DesktopBackground\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.DesktopBackground)
+                (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
+                (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles)),
+                (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory),
+                (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory)),
+                (BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder),
+                (BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive),
+                (BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects),
+                (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+                (BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground)
             };
 
             foreach (var loc in commonLocations)
@@ -68,16 +68,16 @@ namespace ContextMenuProfiler.UI.Core
                         // It's an extension
                         // Check SystemFileAssociations
                         string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(keyName);
-                        ScanLocation(handlers, $"SystemFileAssociations\\{keyName}\\shellex\\ContextMenuHandlers", extensionLocation);
-                        ScanLocation(handlers, $"SystemFileAssociations\\{keyName}\\shellex\\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
+                        ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(keyName, disabled: false), extensionLocation);
+                        ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(keyName, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
 
                         // Get ProgID
                         string? progId = GetProgID(keyName);
                         if (!string.IsNullOrEmpty(progId))
                         {
                             string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, keyName);
-                            ScanLocation(handlers, $"{progId}\\shellex\\ContextMenuHandlers", progIdLocation);
-                            ScanLocation(handlers, $"{progId}\\shellex\\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
+                            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
+                            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
                         }
                     }
                 });
@@ -93,33 +93,33 @@ namespace ContextMenuProfiler.UI.Core
             bool isDirectory = Directory.Exists(targetPath);
             string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
 
-            ScanLocation(handlers, @"*\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.AllFiles);
-            ScanLocation(handlers, @"*\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles));
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles));
 
             if (isDirectory)
             {
-                ScanLocation(handlers, @"Directory\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Directory);
-                ScanLocation(handlers, @"Directory\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory));
-                ScanLocation(handlers, @"Folder\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Folder);
-                ScanLocation(handlers, @"Drive\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.Drive);
-                ScanLocation(handlers, @"AllFileSystemObjects\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects);
-                ScanLocation(handlers, @"Directory\Background\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
-                ScanLocation(handlers, @"DesktopBackground\shellex\ContextMenuHandlers", BenchmarkSemantics.RegistryLocationLabel.DesktopBackground);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory));
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground);
                 return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
             }
 
             if (!string.IsNullOrEmpty(ext))
             {
                 string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(ext);
-                ScanLocation(handlers, $@"SystemFileAssociations\{ext}\shellex\ContextMenuHandlers", extensionLocation);
-                ScanLocation(handlers, $@"SystemFileAssociations\{ext}\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(ext, disabled: false), extensionLocation);
+                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(ext, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
 
                 string? progId = GetProgID(ext);
                 if (!string.IsNullOrEmpty(progId))
                 {
                     string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, ext);
-                    ScanLocation(handlers, $@"{progId}\shellex\ContextMenuHandlers", progIdLocation);
-                    ScanLocation(handlers, $@"{progId}\shellex\-ContextMenuHandlers", BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
+                    ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
+                    ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
                 }
             }
 
@@ -211,11 +211,11 @@ namespace ContextMenuProfiler.UI.Core
             // 1. Scan Global Locations
             var shellLocations = new[]
             {
-                (@"*\shell", BenchmarkSemantics.RegistryLocationLabel.AllFiles),
-                (@"Directory\shell", BenchmarkSemantics.RegistryLocationLabel.Directory),
-                (@"Directory\Background\shell", BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
-                (@"Drive\shell", BenchmarkSemantics.RegistryLocationLabel.Drive),
-                (@"Folder\shell", BenchmarkSemantics.RegistryLocationLabel.Folder)
+                (BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
+                (BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory),
+                (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+                (BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive),
+                (BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder)
             };
 
             foreach (var loc in shellLocations)
@@ -232,24 +232,24 @@ namespace ContextMenuProfiler.UI.Core
             bool isDirectory = Directory.Exists(targetPath);
             string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
 
-            ScanShellKey(verbs, @"*\shell", BenchmarkSemantics.RegistryLocationLabel.AllFiles);
+            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
 
             if (isDirectory)
             {
-                ScanShellKey(verbs, @"Directory\shell", BenchmarkSemantics.RegistryLocationLabel.Directory);
-                ScanShellKey(verbs, @"Directory\Background\shell", BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
-                ScanShellKey(verbs, @"Drive\shell", BenchmarkSemantics.RegistryLocationLabel.Drive);
-                ScanShellKey(verbs, @"Folder\shell", BenchmarkSemantics.RegistryLocationLabel.Folder);
+                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory);
+                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
+                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive);
+                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder);
                 return new Dictionary<string, List<string>>(verbs);
             }
 
             if (!string.IsNullOrEmpty(ext))
             {
-                ScanShellKey(verbs, $@"SystemFileAssociations\{ext}\shell", BenchmarkSemantics.BuildExtensionRegistryLocationLabel(ext));
+                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell(ext), BenchmarkSemantics.BuildExtensionRegistryLocationLabel(ext));
                 string? progId = GetProgID(ext);
                 if (!string.IsNullOrEmpty(progId))
                 {
-                    ScanShellKey(verbs, $@"{progId}\shell", BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, ext));
+                    ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell(progId), BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, ext));
                 }
             }
 
