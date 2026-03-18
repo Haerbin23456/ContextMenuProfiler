@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Core
 {
@@ -519,6 +520,38 @@ namespace ContextMenuProfiler.UI.Core
                 BenchmarkStatus.EnabledPendingRestart => "Enabled (Pending Restart)",
                 _ => "Unknown"
             };
+        }
+
+        public static string GetStatusLocalizationKey(BenchmarkStatus status)
+        {
+            return status switch
+            {
+                BenchmarkStatus.Unknown => "Dashboard.Status.Unknown",
+                BenchmarkStatus.Ok => "Dashboard.Status.Ok",
+                BenchmarkStatus.VerifiedViaHook => "Dashboard.Status.VerifiedViaHook",
+                BenchmarkStatus.HookLoadedNoMenu => "Dashboard.Status.HookLoadedNoMenu",
+                BenchmarkStatus.OrphanedMissingDll => "Dashboard.Status.OrphanedMissingDll",
+                BenchmarkStatus.IpcTimeout => "Dashboard.Status.IpcTimeout",
+                BenchmarkStatus.LoadError => "Dashboard.Status.LoadError",
+                BenchmarkStatus.RegistryFallback => "Dashboard.Status.RegistryFallback",
+                BenchmarkStatus.StaticNotMeasured => "Dashboard.Status.StaticNotMeasured",
+                BenchmarkStatus.SkippedKnownUnstable => "Dashboard.Status.SkippedKnownUnstable",
+                BenchmarkStatus.DisabledPendingRestart => "Dashboard.Status.DisabledPendingRestart",
+                BenchmarkStatus.EnabledPendingRestart => "Dashboard.Status.EnabledPendingRestart",
+                _ => "Dashboard.Status.Unknown"
+            };
+        }
+
+        public static string GetLocalizedStatusText(BenchmarkStatus status)
+        {
+            string key = GetStatusLocalizationKey(status);
+            string localized = LocalizationService.Instance[key];
+            if (string.Equals(localized, key, StringComparison.Ordinal))
+            {
+                return GetStatusDisplayText(status);
+            }
+
+            return localized;
         }
 
         public static bool TryParseStatus(string? status, out BenchmarkStatus parsedStatus)

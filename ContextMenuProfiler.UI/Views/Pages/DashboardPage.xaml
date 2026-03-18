@@ -21,6 +21,7 @@
     <Page.Resources>
         <converters:TypeToIconConverter x:Key="TypeToIconConverter"/>
         <converters:StatusToVisibilityConverter x:Key="StatusToVisibilityConverter"/>
+        <converters:StatusToLocalizedTextConverter x:Key="StatusToLocalizedTextConverter"/>
         <converters:IconToImageConverter x:Key="IconToImageConverter"/>
         <converters:StringNullOrEmptyToVisibilityConverter x:Key="StringNullOrEmptyToVisibilityConverter"/>
         <converters:LoadTimeToBrushConverter x:Key="LoadTimeToBrushConverter"/>
@@ -543,6 +544,11 @@
                                     <!-- Details -->
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Dashboard.Label.Details], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Margin="0,0,16,8" VerticalAlignment="Top"/>
                                     <WrapPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                            <TextBlock Text="{Binding [Dashboard.Label.Status], Source={x:Static services:LocalizationService.Instance}}" Opacity="0.6"/>
+                                            <TextBlock Text="{Binding Status, Converter={StaticResource StatusToLocalizedTextConverter}}" FontWeight="Medium"/>
+                                        </StackPanel>
+
                                         <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
                                             <TextBlock Text="{Binding [Dashboard.Label.Interface], Source={x:Static services:LocalizationService.Instance}}" Opacity="0.6"/>
                                             <TextBlock Text="{Binding InterfaceType, Converter={StaticResource NullOrEmptyToLocalizedConverter}, ConverterParameter=Dashboard.Value.Unknown}" FontWeight="Medium"/>
