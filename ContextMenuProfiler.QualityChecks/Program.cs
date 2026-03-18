@@ -34,6 +34,11 @@ static string FindFileUpward(string relativePath)
     throw new FileNotFoundException($"Could not locate file by relative path: {relativePath}");
 }
 
+static string ReadSource(string relativePath)
+{
+    return File.ReadAllText(FindFileUpward(relativePath));
+}
+
 static void AssertNull(string? value, string caseName)
 {
     if (value != null)
@@ -46,6 +51,16 @@ static void AssertSourceDoesNotContainAny(string source, string caseName, params
 {
     var hit = forbiddenLiterals.Where(l => source.Contains($"\"{l}\"", StringComparison.Ordinal)).ToList();
     AssertTrue(hit.Count == 0, caseName, hit.Count == 0 ? null : string.Join(", ", hit));
+}
+
+static void AssertSourceContains(string source, string requiredLiteral, string caseName)
+{
+    AssertTrue(source.Contains(requiredLiteral, StringComparison.Ordinal), caseName);
+}
+
+static void AssertSourceNotContains(string source, string forbiddenLiteral, string caseName)
+{
+    AssertTrue(!source.Contains(forbiddenLiteral, StringComparison.Ordinal), caseName);
 }
 
 string requestWithoutHint = HookIpcClient.BuildRequest("{00000000-0000-0000-0000-000000000000}", @"C:\Temp\a.txt", null);
@@ -134,48 +149,20 @@ foreach (var key in criticalKeys)
     AssertTrue(resources["zh-CN"].TryGetValue(key, out var zhValue) && !string.IsNullOrWhiteSpace(zhValue), $"LocalizationChineseValue:{key}");
 }
 
-string benchmarkServicePath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
-string benchmarkServiceSource = File.ReadAllText(benchmarkServicePath);
+string benchmarkServiceSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
+string benchmarkSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
+string benchmarkStatisticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
+string hookIpcClientSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
+string hookIpcSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
+string packageScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
+string dashboardViewModelSource = ReadSource(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
+string registryPathHelperSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
+string statusVisibilityConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
+string typeToIconConverterSource = ReadSource(@"ContextMenuProfiler.UI\Converters\TypeToIconConverter.cs");
+string dashboardPageXamlSource = ReadSource(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
 
-string benchmarkSemanticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
-string benchmarkSemanticsSource = File.ReadAllText(benchmarkSemanticsPath);
-
-string benchmarkStatisticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
-string benchmarkStatisticsSource = File.ReadAllText(benchmarkStatisticsPath);
-
-string hookIpcClientPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
-string hookIpcClientSource = File.ReadAllText(hookIpcClientPath);
-
-string hookIpcSemanticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
-string hookIpcSemanticsSource = File.ReadAllText(hookIpcSemanticsPath);
-
-string packageScannerPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
-string packageScannerSource = File.ReadAllText(packageScannerPath);
-
-string dashboardViewModelPath = FindFileUpward(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
-string dashboardViewModelSource = File.ReadAllText(dashboardViewModelPath);
-
-string registryPathHelperPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
-string registryPathHelperSource = File.ReadAllText(registryPathHelperPath);
-
-string statusVisibilityConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
-string statusVisibilityConverterSource = File.ReadAllText(statusVisibilityConverterPath);
-
-string typeToIconConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\TypeToIconConverter.cs");
-string typeToIconConverterSource = File.ReadAllText(typeToIconConverterPath);
-
-string dashboardPageXamlPath = FindFileUpward(@"ContextMenuProfiler.UI\Views\Pages\DashboardPage.xaml");
-string dashboardPageXamlSource = File.ReadAllText(dashboardPageXamlPath);
-
-AssertTrue(
-    benchmarkServiceSource.Contains("RunBenchmarkAsync(targetPath)", StringComparison.Ordinal),
-    "AnalyzeFileUsesPathSpecificBenchmark"
-);
-
-AssertTrue(
-    !benchmarkServiceSource.Contains("return RunSystemBenchmark(ScanMode.Targeted)", StringComparison.Ordinal),
-    "AnalyzeFileDoesNotFallbackToSystemScan"
-);
+AssertSourceContains(benchmarkServiceSource, "RunBenchmarkAsync(targetPath)", "AnalyzeFileUsesPathSpecificBenchmark");
+AssertSourceNotContains(benchmarkServiceSource, "return RunSystemBenchmark(ScanMode.Targeted)", "AnalyzeFileDoesNotFallbackToSystemScan");
 
 AssertTrue(
     benchmarkSemanticsSource.Contains("MaxParallelProbeTasks = 8", StringComparison.Ordinal)
