@@ -154,6 +154,7 @@ string benchmarkSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\Bench
 string benchmarkStatisticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
 string hookIpcClientSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
 string hookIpcSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
+string registryScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\RegistryScanner.cs");
 string packageScannerSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
 string dashboardViewModelSource = ReadSource(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
 string registryPathHelperSource = ReadSource(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
@@ -200,6 +201,33 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("public static bool IsSkipUnstableHandlersEnabled", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static bool ContainsKnownUnstableHandlerToken", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesUnstableHandlerHelpers"
+);
+
+AssertTrue(
+    benchmarkSemanticsSource.Contains("public static class RegistryLocationLabel", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("DisabledSuffix = \" [Disabled]\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildRegistryHandlerLocation", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesRegistryScannerLocationHelpers"
+);
+
+AssertTrue(
+    registryScannerSource.Contains("BenchmarkSemantics.RegistryLocationLabel.AllFiles", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildRegistryHandlerLocation", StringComparison.Ordinal),
+    "RegistryScannerUsesSemanticLocationBuilders"
+);
+
+AssertTrue(
+    !registryScannerSource.Contains("\"All Files (*)\"", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("\"Directory [Disabled]\"", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("\"Extension (", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("\"ProgID (", StringComparison.Ordinal),
+    "RegistryScannerNoInlineLocationLabelLiterals"
 );
 
 AssertTrue(

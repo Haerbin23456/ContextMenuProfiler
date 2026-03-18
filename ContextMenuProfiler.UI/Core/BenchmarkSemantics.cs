@@ -101,6 +101,19 @@ namespace ContextMenuProfiler.UI.Core
             public const string AllFileSystemObjects = "All File System Objects";
         }
 
+        public static class RegistryLocationLabel
+        {
+            public const string AllFiles = "All Files (*)";
+            public const string Directory = "Directory";
+            public const string Folder = "Folder";
+            public const string Drive = "Drive";
+            public const string AllFileSystemObjects = "All File System Objects";
+            public const string DirectoryBackground = "Directory Background";
+            public const string DesktopBackground = "Desktop Background";
+            public const string Extension = "Extension";
+            public const string ProgId = "ProgID";
+        }
+
         public static class InterfaceType
         {
             public const string StaticVerb = "Static Verb";
@@ -116,6 +129,7 @@ namespace ContextMenuProfiler.UI.Core
         public static class RegistryLocationToken
         {
             public const string Disabled = "[Disabled]";
+            public const string DisabledSuffix = " [Disabled]";
             public const string StaticVerbDisabledKeyPrefix = "-";
         }
 
@@ -195,6 +209,26 @@ namespace ContextMenuProfiler.UI.Core
         {
             return !string.IsNullOrWhiteSpace(location)
                 && location.Contains(RegistryLocationToken.Disabled, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string BuildDisabledRegistryLocationLabel(string locationLabel)
+        {
+            return locationLabel + RegistryLocationToken.DisabledSuffix;
+        }
+
+        public static string BuildExtensionRegistryLocationLabel(string extension)
+        {
+            return $"{RegistryLocationLabel.Extension} ({extension})";
+        }
+
+        public static string BuildProgIdRegistryLocationLabel(string progId, string extension)
+        {
+            return $"{RegistryLocationLabel.ProgId} ({progId} for {extension})";
+        }
+
+        public static string BuildRegistryHandlerLocation(string locationLabel, string handlerName)
+        {
+            return $"{locationLabel} ({handlerName})";
         }
 
         public static string BuildStaticVerbRegistryLocation(string? registryPath)
