@@ -388,6 +388,20 @@ AssertTrue(
 );
 
 AssertTrue(
+    dashboardViewModelSource.Contains("private void NotifyScanComplete", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("NotifyScanComplete(Results.Count)", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("NotifyScanComplete(results.Count, filePath)", StringComparison.Ordinal),
+    "DashboardViewModelUsesScanCompleteHelper"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("private void HandleScanFailure", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("HandleScanFailure(\"Scan System Failed\"", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("HandleScanFailure(\"File Scan Failed\"", StringComparison.Ordinal),
+    "DashboardViewModelUsesScanFailureHelper"
+);
+
+AssertTrue(
     registryPathHelperSource.Contains("public static class RegistryPathHelper", StringComparison.Ordinal)
     && registryPathHelperSource.Contains("NormalizeForRegedit", StringComparison.Ordinal)
     && registryPathHelperSource.Contains("ClassesRootPrefix", StringComparison.Ordinal),

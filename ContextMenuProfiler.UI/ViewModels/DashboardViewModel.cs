@@ -398,14 +398,11 @@ namespace ContextMenuProfiler.UI.ViewModels
                 // Ensure summary values are refreshed even if no progress callback was emitted.
                 UpdateStats();
 
-                StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], Results.Count);
-                NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], Results.Count));
+                NotifyScanComplete(Results.Count);
             }
             catch (Exception ex)
             {
-                LogService.Instance.Error("Scan System Failed", ex);
-                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
-                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
+                HandleScanFailure("Scan System Failed", ex, setRealLoadError: false);
             }
             finally
             {
@@ -474,21 +471,45 @@ namespace ContextMenuProfiler.UI.ViewModels
                         InsertSorted(res);
                     }
                     UpdateStats();
-                    StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], results.Count);
-                    NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"], results.Count, System.IO.Path.GetFileName(filePath)));
+                    NotifyScanComplete(results.Count, filePath);
                 }
 
             }
             catch (Exception ex)
             {
-                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
-                LogService.Instance.Error("File Scan Failed", ex);
-                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
-                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
+                HandleScanFailure("File Scan Failed", ex, setRealLoadError: true);
             }
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        private void NotifyScanComplete(int resultCount, string? filePath = null)
+        {
+            StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], resultCount);
+
+            string message = string.IsNullOrEmpty(filePath)
+                ? string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], resultCount)
+                : string.Format(
+                    LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"],
+                    resultCount,
+                    System.IO.Path.GetFileName(filePath));
+
+            NotificationService.Instance.ShowSuccess(
+                LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"],
+                message);
+        }
+
+        private void HandleScanFailure(string logMessage, Exception ex, bool setRealLoadError)
+        {
+            LogService.Instance.Error(logMessage, ex);
+            StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
+            NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
+
+            if (setRealLoadError)
+            {
+                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
             }
         }
 
