@@ -190,6 +190,12 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("Timeout = \"Timeout\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool IsTimeoutLikeError", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesTimeoutErrorHelper"
+);
+
+AssertTrue(
     !benchmarkSemanticsSource.Contains("bool hasDrive = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFolder = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFile = false;", StringComparison.Ordinal),
@@ -295,6 +301,12 @@ AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)", StringComparison.Ordinal)
     && benchmarkServiceSource.Contains("paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled)", StringComparison.Ordinal),
     "BenchmarkServiceUsesStaticVerbRegistrySemanticHelpers"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.IsTimeoutLikeError(hookData.error)", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("hookData.error.Contains(\"Timeout\"", StringComparison.Ordinal),
+    "BenchmarkServiceUsesTimeoutErrorSemanticHelper"
 );
 
 AssertTrue(

@@ -283,7 +283,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 string hookError = hookData.error ?? LocalizationService.Instance["Dashboard.Value.Unknown"];
 
-                if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+                if (BenchmarkSemantics.IsTimeoutLikeError(hookData.error))
                 {
                     result.Status = BenchmarkSemantics.Status.IpcTimeout;
                     result.DetailedStatus = string.Format(

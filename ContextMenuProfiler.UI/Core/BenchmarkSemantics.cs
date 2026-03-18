@@ -77,6 +77,7 @@ namespace ContextMenuProfiler.UI.Core
         {
             public const string Fallback = "Fallback";
             public const string Error = "Error";
+            public const string Timeout = "Timeout";
             public const string Orphaned = "Orphaned";
             public const string Missing = "Missing";
             public const string Exception = "Exception";
@@ -226,6 +227,16 @@ namespace ContextMenuProfiler.UI.Core
             return status.Contains(StatusToken.NotMeasured, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.Unsupported, StringComparison.OrdinalIgnoreCase)
                 || status.Contains(StatusToken.NoMenu, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsTimeoutLikeError(string? error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                return false;
+            }
+
+            return error.Contains(StatusToken.Timeout, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string ResolveCategoryFromLocations(IEnumerable<string> locations)
