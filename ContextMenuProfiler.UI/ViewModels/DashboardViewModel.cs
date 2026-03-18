@@ -510,7 +510,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                 fields: new Dictionary<string, object?>
                 {
                     ["scan_id"] = _currentScanId,
-                    ["scan_mode"] = _lastScanMode.ToString(),
+                    ["scan_scope"] = ResolveScanScope(_lastScanMode),
+                    ["scan_depth"] = ResolveScanDepth(_lastScanMode),
+                    ["scan_mode"] = ResolveScanDepth(_lastScanMode),
                     ["target_path"] = filePath,
                     ["result_count"] = resultCount,
                     ["display_result_count"] = DisplayResults.Count,
@@ -539,7 +541,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                 fields: new Dictionary<string, object?>
                 {
                     ["scan_id"] = _currentScanId,
-                    ["scan_mode"] = _lastScanMode.ToString(),
+                    ["scan_scope"] = ResolveScanScope(_lastScanMode),
+                    ["scan_depth"] = ResolveScanDepth(_lastScanMode),
+                    ["scan_mode"] = ResolveScanDepth(_lastScanMode),
                     ["target_path"] = _lastScanPath
                 });
             StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
@@ -565,7 +569,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                 fields: new Dictionary<string, object?>
                 {
                     ["scan_id"] = _currentScanId,
-                    ["scan_mode"] = mode.ToString(),
+                    ["scan_scope"] = ResolveScanScope(mode),
+                    ["scan_depth"] = ResolveScanDepth(mode),
+                    ["scan_mode"] = ResolveScanDepth(mode),
                     ["scan_path"] = scanPath,
                     ["deep_scan"] = UseDeepScan,
                     ["hook_status"] = HookService.Instance.CurrentStatus
@@ -600,6 +606,21 @@ namespace ContextMenuProfiler.UI.ViewModels
                 thread.Join();
                 return threadResult ?? new List<BenchmarkResult>();
             });
+        }
+
+        private string ResolveScanScope(LastScanMode mode)
+        {
+            return mode == LastScanMode.File ? "file" : "system";
+        }
+
+        private string ResolveScanDepth(LastScanMode mode)
+        {
+            if (mode == LastScanMode.File)
+            {
+                return "targeted";
+            }
+
+            return UseDeepScan ? "full" : "targeted";
         }
 
         private void ApplyLocalizedCategoryNames()

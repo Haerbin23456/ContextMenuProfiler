@@ -89,7 +89,9 @@ namespace ContextMenuProfiler.UI.Core
                 fields: new Dictionary<string, object?>
                 {
                     ["scan_id"] = scanId,
-                    ["scan_mode"] = mode.ToString(),
+                    ["scan_scope"] = "system",
+                    ["scan_depth"] = ResolveScanDepth(mode),
+                    ["scan_mode"] = ResolveScanDepth(mode),
                     ["scope"] = "system",
                     ["com_handler_count"] = registryHandlers.Count,
                     ["static_verb_group_count"] = staticVerbs.Count
@@ -100,7 +102,7 @@ namespace ContextMenuProfiler.UI.Core
 
             LogService.Instance.InfoEvent(
                 "scan.service_completed",
-                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, mode.ToString(), "system"));
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "system", ResolveScanDepth(mode)));
 
             return results;
         }
@@ -138,7 +140,9 @@ namespace ContextMenuProfiler.UI.Core
                 fields: new Dictionary<string, object?>
                 {
                     ["scan_id"] = scanId,
-                    ["scan_mode"] = "file",
+                    ["scan_scope"] = "file",
+                    ["scan_depth"] = "targeted",
+                    ["scan_mode"] = "targeted",
                     ["scope"] = "file",
                     ["target_path"] = targetPath,
                     ["com_handler_count"] = registryHandlers.Count,
@@ -150,7 +154,7 @@ namespace ContextMenuProfiler.UI.Core
 
             LogService.Instance.InfoEvent(
                 "scan.service_completed",
-                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "file", "file", targetPath));
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "file", "targeted", targetPath));
 
             return results;
         }
@@ -869,8 +873,8 @@ namespace ContextMenuProfiler.UI.Core
             List<BenchmarkResult> results,
             long durationMs,
             string? scanId,
-            string scanMode,
-            string scope,
+            string scanScope,
+            string scanDepth,
             string? targetPath = null)
         {
             int measuredCount = results.Count(r => r.TotalTime > 0);
@@ -879,14 +883,21 @@ namespace ContextMenuProfiler.UI.Core
             return new Dictionary<string, object?>
             {
                 ["scan_id"] = scanId,
-                ["scan_mode"] = scanMode,
-                ["scope"] = scope,
+                ["scan_scope"] = scanScope,
+                ["scan_depth"] = scanDepth,
+                ["scan_mode"] = scanDepth,
+                ["scope"] = scanScope,
                 ["target_path"] = targetPath,
                 ["duration_ms"] = durationMs,
                 ["result_count"] = results.Count,
                 ["measured_count"] = measuredCount,
                 ["fallback_count"] = fallbackCount
             };
+        }
+
+        private static string ResolveScanDepth(ScanMode mode)
+        {
+            return mode == ScanMode.Full ? "full" : "targeted";
         }
 
         private static Dictionary<string, object?> BuildItemFields(BenchmarkResult result, string? scanId, string source)
@@ -897,7 +908,7 @@ namespace ContextMenuProfiler.UI.Core
                 ["source"] = source,
                 ["clsid"] = result.Clsid?.ToString("B"),
                 ["name"] = result.Name,
-                ["friendly_name"] = result.FriendlyName,
+                ["friendly_name"] = string.IsNullOrWhiteSpace(result.FriendlyName) ? null : result.FriendlyName,
                 ["observed_menu_display_names"] = result.ObservedMenuDisplayNames,
                 ["observed_menu_display_name_count"] = result.ObservedMenuDisplayNames?.Count ?? 0,
                 ["type"] = result.Type,

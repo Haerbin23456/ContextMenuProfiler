@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -16,6 +17,7 @@ namespace ContextMenuProfiler.UI.Core.Services
         {
             WriteIndented = false
         };
+        private static readonly ConcurrentDictionary<string, long> ScanEventSequence = new ConcurrentDictionary<string, long>(StringComparer.Ordinal);
         private readonly AsyncLocal<IReadOnlyDictionary<string, object?>?> _scopeFields = new AsyncLocal<IReadOnlyDictionary<string, object?>?>();
 
         public static LogService Instance { get; } = new LogService();
@@ -122,6 +124,20 @@ namespace ContextMenuProfiler.UI.Core.Services
                 if (ex != null)
                 {
                     payload["exception"] = BuildExceptionObject(ex);
+                }
+
+                if (payload.TryGetValue("scan_id", out object? scanIdValue)
+                    && scanIdValue is string scanId
+                    && !string.IsNullOrWhiteSpace(scanId))
+                {
+                    long seq = ScanEventSequence.AddOrUpdate(scanId, 1, static (_, current) => current + 1);
+                    payload["event_seq"] = seq;
+
+                    if (string.Equals(eventName, "scan.session_completed", StringComparison.Ordinal)
+                        || string.Equals(eventName, "scan.session_failed", StringComparison.Ordinal))
+                    {
+                        ScanEventSequence.TryRemove(scanId, out _);
+                    }
                 }
 
                 string logEntry = JsonSerializer.Serialize(payload, JsonOptions);

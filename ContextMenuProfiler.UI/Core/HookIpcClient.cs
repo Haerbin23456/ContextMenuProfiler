@@ -104,6 +104,10 @@ namespace ContextMenuProfiler.UI.Core
                         ["clsid"] = clsid,
                         ["attempts"] = attempts,
                         ["success"] = result.data?.success == true,
+                        ["probe_outcome"] = ResolveProbeOutcome(result),
+                        ["hook_success"] = result.data?.success,
+                        ["hook_code"] = result.data?.code,
+                        ["hook_error"] = result.data?.error,
                         ["ipc_error"] = result.ipc_error,
                         ["lock_wait_ms"] = result.lock_wait_ms,
                         ["connect_ms"] = result.connect_ms,
@@ -255,6 +259,21 @@ namespace ContextMenuProfiler.UI.Core
             var data = call.data;
             if (data == null || !data.success || string.IsNullOrEmpty(data.names)) return Array.Empty<string>();
             return data.names.Split(HookIpcSemantics.Response.MultiValueDelimiter, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        private static string ResolveProbeOutcome(HookCallResult result)
+        {
+            if (!string.IsNullOrWhiteSpace(result.ipc_error))
+            {
+                return "ipc_error";
+            }
+
+            if (result.data == null)
+            {
+                return "unknown";
+            }
+
+            return result.data.success ? "ok" : "hook_error";
         }
 
         private static bool ShouldRetry(int attempt)
