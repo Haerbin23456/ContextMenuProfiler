@@ -27,6 +27,18 @@ namespace ContextMenuProfiler.UI.Core
 
     public class RegistryScanner
     {
+        private readonly struct TargetAssociationContext
+        {
+            public TargetAssociationContext(bool isDirectory, string associationType)
+            {
+                IsDirectory = isDirectory;
+                AssociationType = associationType;
+            }
+
+            public bool IsDirectory { get; }
+            public string AssociationType { get; }
+        }
+
         public static Dictionary<Guid, List<RegistryHandlerInfo>> ScanHandlers(ScanMode mode = ScanMode.Targeted)
         {
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
@@ -90,15 +102,12 @@ namespace ContextMenuProfiler.UI.Core
         public static Dictionary<Guid, List<RegistryHandlerInfo>> ScanHandlersForPath(string targetPath)
         {
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
-            bool isDirectory = Directory.Exists(targetPath);
-            string ext = isDirectory
-                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
-                : Path.GetExtension(targetPath).ToLowerInvariant();
+            var context = ResolveTargetAssociationContext(targetPath);
 
             ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
             ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles));
 
-            if (isDirectory)
+            if (context.IsDirectory)
             {
                 ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory);
                 ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory));
@@ -110,20 +119,7 @@ namespace ContextMenuProfiler.UI.Core
                 return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
             }
 
-            if (!string.IsNullOrEmpty(ext))
-            {
-                string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(ext);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(ext, disabled: false), extensionLocation);
-                ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(ext, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
-
-                string? progId = GetProgID(ext);
-                if (!string.IsNullOrEmpty(progId))
-                {
-                    string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, ext);
-                    ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
-                    ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
-                }
-            }
+            ScanFileAssociationHandlers(handlers, context.AssociationType);
 
             return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
         }
@@ -231,14 +227,11 @@ namespace ContextMenuProfiler.UI.Core
         public static Dictionary<string, List<string>> ScanStaticVerbsForPath(string targetPath)
         {
             var verbs = new ConcurrentDictionary<string, List<string>>();
-            bool isDirectory = Directory.Exists(targetPath);
-            string ext = isDirectory
-                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
-                : Path.GetExtension(targetPath).ToLowerInvariant();
+            var context = ResolveTargetAssociationContext(targetPath);
 
             ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
 
-            if (isDirectory)
+            if (context.IsDirectory)
             {
                 ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory);
                 ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground);
@@ -247,17 +240,59 @@ namespace ContextMenuProfiler.UI.Core
                 return new Dictionary<string, List<string>>(verbs);
             }
 
-            if (!string.IsNullOrEmpty(ext))
-            {
-                ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell(ext), BenchmarkSemantics.BuildExtensionRegistryLocationLabel(ext));
-                string? progId = GetProgID(ext);
-                if (!string.IsNullOrEmpty(progId))
-                {
-                    ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell(progId), BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, ext));
-                }
-            }
+            ScanFileAssociationShellVerbs(verbs, context.AssociationType);
 
             return new Dictionary<string, List<string>>(verbs);
+        }
+
+        private static TargetAssociationContext ResolveTargetAssociationContext(string targetPath)
+        {
+            bool isDirectory = Directory.Exists(targetPath);
+            string associationType = isDirectory
+                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
+                : Path.GetExtension(targetPath).ToLowerInvariant();
+
+            return new TargetAssociationContext(isDirectory, associationType);
+        }
+
+        private static void ScanFileAssociationHandlers(ConcurrentDictionary<Guid, List<RegistryHandlerInfo>> handlers, string extension)
+        {
+            if (string.IsNullOrEmpty(extension))
+            {
+                return;
+            }
+
+            string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(extension);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(extension, disabled: false), extensionLocation);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(extension, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
+
+            string? progId = GetProgID(extension);
+            if (string.IsNullOrEmpty(progId))
+            {
+                return;
+            }
+
+            string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, extension);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
+        }
+
+        private static void ScanFileAssociationShellVerbs(ConcurrentDictionary<string, List<string>> verbs, string extension)
+        {
+            if (string.IsNullOrEmpty(extension))
+            {
+                return;
+            }
+
+            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell(extension), BenchmarkSemantics.BuildExtensionRegistryLocationLabel(extension));
+
+            string? progId = GetProgID(extension);
+            if (string.IsNullOrEmpty(progId))
+            {
+                return;
+            }
+
+            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell(progId), BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, extension));
         }
 
         private static void ScanShellKey(ConcurrentDictionary<string, List<string>> verbs, string subKeyPath, string locationName)
