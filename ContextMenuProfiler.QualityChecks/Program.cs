@@ -212,11 +212,16 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildRegistryHandlerLocation", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static class RegistryPathPattern", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("AnyAssociationType = \"*\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("DirectoryAssociationType = \"directory\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("FolderAssociationType = \"folder\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("DirectoryBackgroundAssociationType = @\"directory\\background\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("AllFilesHandlers = @\"*\\shellex\\ContextMenuHandlers\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildSystemFileAssociationHandlers", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildProgIdHandlers", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("BuildSystemFileAssociationShell", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("BuildProgIdShell", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("BuildProgIdShell", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IsDirectoryLikeAssociationType", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRegistryScannerLocationHelpers"
 );
 
@@ -241,6 +246,7 @@ AssertTrue(
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.AllFilesShell", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.CommandSubKeyName", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.MuiVerbValueName", StringComparison.Ordinal)
@@ -253,12 +259,28 @@ AssertTrue(
     && !registryScannerSource.Contains("\"Directory [Disabled]\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"Extension (", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"ProgID (", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("\"directory\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("@\"*\\shellex\\ContextMenuHandlers\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("@\"Directory\\shell\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("SystemFileAssociations\\", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"Attributes\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("verbName.Equals(\"AnyCode\"", StringComparison.Ordinal),
     "RegistryScannerNoInlineLocationLabelLiterals"
+);
+
+AssertTrue(
+    packageScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.AnyAssociationType", StringComparison.Ordinal)
+    && packageScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.IsDirectoryLikeAssociationType", StringComparison.Ordinal)
+    && packageScannerSource.Contains("BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType", StringComparison.Ordinal),
+    "PackageScannerUsesAssociationTypeSemantics"
+);
+
+AssertTrue(
+    !packageScannerSource.Contains("\"directory\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"folder\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"directory\\\\background\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("type == \"*\"", StringComparison.Ordinal),
+    "PackageScannerNoInlineAssociationTypeLiterals"
 );
 
 AssertTrue(

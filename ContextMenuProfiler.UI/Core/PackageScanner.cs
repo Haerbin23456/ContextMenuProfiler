@@ -199,17 +199,24 @@ namespace ContextMenuProfiler.UI.Core
 
         private static string DetermineTargetExtension(string? path)
         {
-            if (path == null) return "";
-            if (Directory.Exists(path)) return "directory";
-            return Path.GetExtension(path).ToLower();
+            if (path == null) return string.Empty;
+            if (Directory.Exists(path)) return BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType;
+            return Path.GetExtension(path).ToLowerInvariant();
         }
 
         private static bool IsTypeMatch(string type, string targetExt)
         {
-            if (type == "*") return true;
-            if (type == "directory" || type == "folder") return targetExt == "directory";
-            if (type == "directory\\background") return targetExt == "directory";
-            return type == targetExt;
+            if (string.Equals(type, BenchmarkSemantics.RegistryPathPattern.AnyAssociationType, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (BenchmarkSemantics.RegistryPathPattern.IsDirectoryLikeAssociationType(type))
+            {
+                return string.Equals(targetExt, BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return string.Equals(type, targetExt, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string? GetPackageNameForClsid(Guid clsid)

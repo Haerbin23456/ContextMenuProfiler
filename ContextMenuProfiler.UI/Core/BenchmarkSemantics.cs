@@ -116,6 +116,11 @@ namespace ContextMenuProfiler.UI.Core
 
         public static class RegistryPathPattern
         {
+            public const string AnyAssociationType = "*";
+            public const string DirectoryAssociationType = "directory";
+            public const string FolderAssociationType = "folder";
+            public const string DirectoryBackgroundAssociationType = @"directory\background";
+
             public const string AllFilesHandlers = @"*\shellex\ContextMenuHandlers";
             public const string AllFilesHandlersDisabled = @"*\shellex\-ContextMenuHandlers";
             public const string DirectoryHandlers = @"Directory\shellex\ContextMenuHandlers";
@@ -152,6 +157,18 @@ namespace ContextMenuProfiler.UI.Core
             public static string BuildProgIdShell(string progId)
             {
                 return $@"{progId}\shell";
+            }
+
+            public static bool IsDirectoryLikeAssociationType(string? type)
+            {
+                if (string.IsNullOrWhiteSpace(type))
+                {
+                    return false;
+                }
+
+                return string.Equals(type, DirectoryAssociationType, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(type, FolderAssociationType, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(type, DirectoryBackgroundAssociationType, StringComparison.OrdinalIgnoreCase);
             }
         }
 

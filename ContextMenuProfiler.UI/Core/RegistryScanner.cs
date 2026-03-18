@@ -91,7 +91,9 @@ namespace ContextMenuProfiler.UI.Core
         {
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
             bool isDirectory = Directory.Exists(targetPath);
-            string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
+            string ext = isDirectory
+                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
+                : Path.GetExtension(targetPath).ToLowerInvariant();
 
             ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
             ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles));
@@ -230,7 +232,9 @@ namespace ContextMenuProfiler.UI.Core
         {
             var verbs = new ConcurrentDictionary<string, List<string>>();
             bool isDirectory = Directory.Exists(targetPath);
-            string ext = isDirectory ? "directory" : Path.GetExtension(targetPath).ToLowerInvariant();
+            string ext = isDirectory
+                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
+                : Path.GetExtension(targetPath).ToLowerInvariant();
 
             ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles);
 
