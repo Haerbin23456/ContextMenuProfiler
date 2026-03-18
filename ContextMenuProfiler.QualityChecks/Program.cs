@@ -191,8 +191,15 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("TryParseStaticVerbKey(key, out string name, out string command)", StringComparison.Ordinal),
+    "BenchmarkServiceUsesStaticVerbKeyParser"
+);
+
+AssertTrue(
     !benchmarkServiceSource.Contains("new SemaphoreSlim(8)", StringComparison.Ordinal)
-    && !benchmarkServiceSource.Contains("hookCall.roundtrip_ms >= 1900", StringComparison.Ordinal),
+    && !benchmarkServiceSource.Contains("hookCall.roundtrip_ms >= 1900", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("key.Split('|')[1]", StringComparison.Ordinal),
     "BenchmarkServiceNoRuntimeMagicNumericLiterals"
 );
 
