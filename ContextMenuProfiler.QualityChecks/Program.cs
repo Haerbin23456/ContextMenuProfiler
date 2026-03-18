@@ -206,7 +206,9 @@ AssertTrue(
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileContent", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.InitialResponseCapacity", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ReadChunkSize", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal),
+    && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("private static async Task<bool> DelayForRetryAsync", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal),
     "HookIpcClientUsesIpcSemanticsConstants"
 );
 
@@ -220,7 +222,8 @@ AssertTrue(
     && !hookIpcClientSource.Contains("attempt == 0", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("ContextMenuProfiler_probe.txt", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
-    && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal),
+    && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("if (ShouldRetry(attempt))", StringComparison.Ordinal),
     "HookIpcClientNoLegacyInlineProtocolRuntimeLiterals"
 );
 

@@ -76,9 +76,8 @@ namespace ContextMenuProfiler.UI.Core
                                 swConnect.Stop();
                                 result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
                                 Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
-                                if (ShouldRetry(attempt))
+                                if (await DelayForRetryAsync(attempt))
                                 {
-                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -109,9 +108,8 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (ShouldRetry(attempt))
+                                if (await DelayForRetryAsync(attempt))
                                 {
-                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -121,9 +119,8 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (ShouldRetry(attempt))
+                                if (await DelayForRetryAsync(attempt))
                                 {
-                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -140,9 +137,8 @@ namespace ContextMenuProfiler.UI.Core
                                 }
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (ShouldRetry(attempt))
+                                if (await DelayForRetryAsync(attempt))
                                 {
-                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -151,9 +147,8 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (ShouldRetry(attempt))
+                                if (await DelayForRetryAsync(attempt))
                                 {
-                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -163,9 +158,8 @@ namespace ContextMenuProfiler.UI.Core
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
-                        if (ShouldRetry(attempt))
+                        if (await DelayForRetryAsync(attempt))
                         {
-                            await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                             continue;
                         }
                         return result;
@@ -199,6 +193,17 @@ namespace ContextMenuProfiler.UI.Core
         private static bool ShouldRetry(int attempt)
         {
             return attempt < HookIpcSemantics.Runtime.MaxAttempts - 1;
+        }
+
+        private static async Task<bool> DelayForRetryAsync(int attempt)
+        {
+            if (!ShouldRetry(attempt))
+            {
+                return false;
+            }
+
+            await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
+            return true;
         }
 
         internal static string BuildRequest(string clsid, string path, string? dllHint)
