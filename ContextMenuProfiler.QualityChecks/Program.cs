@@ -455,8 +455,7 @@ AssertTrue(
     && hookIpcClientSource.Contains("private static async Task<bool> DelayForRetryAsync", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("private static void CompleteRoundTrip", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("private static async Task<bool> CompleteRoundTripAndRetryAsync", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt)", StringComparison.Ordinal),
+    && hookIpcClientSource.Contains("TryProbeOnceAsync", StringComparison.Ordinal),
     "HookIpcClientUsesIpcSemanticsConstants"
 );
 

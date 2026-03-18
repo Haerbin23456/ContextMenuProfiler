@@ -64,78 +64,18 @@ namespace ContextMenuProfiler.UI.Core
                         swLock.Stop();
                         result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
 
-                        using (var client = new NamedPipeClientStream(".", HookIpcSemantics.Runtime.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+                        bool success = await TryProbeOnceAsync(clsid, path, dllHint, result);
+                        if (success)
                         {
-                            var swConnect = Stopwatch.StartNew();
-                            try 
-                            {
-                                await client.ConnectAsync(HookIpcSemantics.Runtime.ConnectTimeoutMs);
-                            }
-                            catch (Exception ex)
-                            {
-                                swConnect.Stop();
-                                result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
-                                Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
-                                if (await DelayForRetryAsync(attempt))
-                                {
-                                    continue;
-                                }
-                                return result;
-                            }
-                            swConnect.Stop();
-                            result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
-                            var swRoundTrip = Stopwatch.StartNew();
-                            using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
-                            string requestStr = BuildRequest(clsid, path, dllHint);
-                            byte[] requestPayload = Encoding.UTF8.GetBytes(requestStr);
-                            byte[] responsePayload;
-                            try
-                            {
-                                await WriteFrameAsync(client, requestPayload, roundTripCts.Token);
-                                responsePayload = await ReadFrameAsync(client, roundTripCts.Token);
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
-                                {
-                                    continue;
-                                }
-                                return result;
-                            }
-
-                            string response = Encoding.UTF8.GetString(responsePayload).TrimEnd('\0');
-
-                            if (string.IsNullOrWhiteSpace(response))
-                            {
-                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
-                                {
-                                    continue;
-                                }
-                                return result;
-                            }
-                            try
-                            {
-                                result.data = JsonSerializer.Deserialize<HookResponse>(response);
-                                if (result.data != null)
-                                {
-                                    CompleteRoundTrip(swRoundTrip, result);
-                                    return result;
-                                }
-                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
-                                {
-                                    continue;
-                                }
-                                return result;
-                            }
-                            catch (JsonException)
-                            {
-                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
-                                {
-                                    continue;
-                                }
-                                return result;
-                            }
+                            return result;
                         }
+
+                        if (await DelayForRetryAsync(attempt))
+                        {
+                            continue;
+                        }
+
+                        return result;
                     }
                     catch (Exception ex)
                     {
@@ -161,6 +101,64 @@ namespace ContextMenuProfiler.UI.Core
                 swTotal.Stop();
                 result.total_ms = Math.Max(0, (long)swTotal.Elapsed.TotalMilliseconds);
             }
+        }
+
+        private static async Task<bool> TryProbeOnceAsync(string clsid, string path, string? dllHint, HookCallResult result)
+        {
+            using var client = new NamedPipeClientStream(".", HookIpcSemantics.Runtime.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+
+            var swConnect = Stopwatch.StartNew();
+            try
+            {
+                await client.ConnectAsync(HookIpcSemantics.Runtime.ConnectTimeoutMs);
+            }
+            catch (Exception ex)
+            {
+                swConnect.Stop();
+                result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+                Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
+                return false;
+            }
+
+            swConnect.Stop();
+            result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+
+            var swRoundTrip = Stopwatch.StartNew();
+            using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
+            string requestStr = BuildRequest(clsid, path, dllHint);
+            byte[] requestPayload = Encoding.UTF8.GetBytes(requestStr);
+            byte[] responsePayload;
+
+            try
+            {
+                await WriteFrameAsync(client, requestPayload, roundTripCts.Token);
+                responsePayload = await ReadFrameAsync(client, roundTripCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                CompleteRoundTrip(swRoundTrip, result);
+                return false;
+            }
+
+            string response = Encoding.UTF8.GetString(responsePayload).TrimEnd('\0');
+            if (string.IsNullOrWhiteSpace(response))
+            {
+                CompleteRoundTrip(swRoundTrip, result);
+                return false;
+            }
+
+            try
+            {
+                result.data = JsonSerializer.Deserialize<HookResponse>(response);
+            }
+            catch (JsonException)
+            {
+                CompleteRoundTrip(swRoundTrip, result);
+                return false;
+            }
+
+            CompleteRoundTrip(swRoundTrip, result);
+            return result.data != null;
         }
 
         [Obsolete("Use GetHookDataAsync instead")]
@@ -192,12 +190,6 @@ namespace ContextMenuProfiler.UI.Core
         {
             swRoundTrip.Stop();
             result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-        }
-
-        private static async Task<bool> CompleteRoundTripAndRetryAsync(Stopwatch swRoundTrip, HookCallResult result, int attempt)
-        {
-            CompleteRoundTrip(swRoundTrip, result);
-            return await DelayForRetryAsync(attempt);
         }
 
         internal static string BuildRequest(string clsid, string path, string? dllHint)
