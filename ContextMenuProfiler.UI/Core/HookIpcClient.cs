@@ -123,10 +123,15 @@ namespace ContextMenuProfiler.UI.Core
             swConnect.Stop();
             result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
 
-            var swRoundTrip = Stopwatch.StartNew();
-            using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
             string requestStr = BuildRequest(clsid, path, dllHint);
             byte[] requestPayload = Encoding.UTF8.GetBytes(requestStr);
+            return await TryProbeFramedAsync(client, requestPayload, result);
+        }
+
+        private static async Task<bool> TryProbeFramedAsync(NamedPipeClientStream client, byte[] requestPayload, HookCallResult result)
+        {
+            var swRoundTrip = Stopwatch.StartNew();
+            using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
             byte[] responsePayload;
 
             try
@@ -134,31 +139,41 @@ namespace ContextMenuProfiler.UI.Core
                 await WriteFrameAsync(client, requestPayload, roundTripCts.Token);
                 responsePayload = await ReadFrameAsync(client, roundTripCts.Token);
             }
-            catch (OperationCanceledException)
+            catch (Exception)
             {
                 CompleteRoundTrip(swRoundTrip, result);
                 return false;
             }
 
             string response = Encoding.UTF8.GetString(responsePayload).TrimEnd('\0');
-            if (string.IsNullOrWhiteSpace(response))
+            if (!TryDeserializeHookResponse(response, out var parsedResponse))
             {
                 CompleteRoundTrip(swRoundTrip, result);
+                return false;
+            }
+
+            result.data = parsedResponse;
+            CompleteRoundTrip(swRoundTrip, result);
+            return true;
+        }
+
+        private static bool TryDeserializeHookResponse(string response, out HookResponse? parsed)
+        {
+            parsed = null;
+            if (string.IsNullOrWhiteSpace(response))
+            {
                 return false;
             }
 
             try
             {
-                result.data = JsonSerializer.Deserialize<HookResponse>(response);
+                parsed = JsonSerializer.Deserialize<HookResponse>(response);
+                return parsed != null;
             }
             catch (JsonException)
             {
-                CompleteRoundTrip(swRoundTrip, result);
                 return false;
             }
-
-            CompleteRoundTrip(swRoundTrip, result);
-            return result.data != null;
         }
 
         [Obsolete("Use GetHookDataAsync instead")]
