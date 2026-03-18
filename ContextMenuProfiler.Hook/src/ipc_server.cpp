@@ -236,7 +236,7 @@ DWORD WINAPI PipeThread(LPVOID) {
         HANDLE hPipe = CreateNamedPipeA(
             "\\\\.\\pipe\\ContextMenuProfilerHook",
             PIPE_ACCESS_DUPLEX,
-            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, NULL);
         if (hPipe == INVALID_HANDLE_VALUE) { Sleep(100); continue; }
         
