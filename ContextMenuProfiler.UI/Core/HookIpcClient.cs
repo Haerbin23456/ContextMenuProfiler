@@ -32,6 +32,7 @@ namespace ContextMenuProfiler.UI.Core
         public long connect_ms { get; set; }
         public long roundtrip_ms { get; set; }
         public long total_ms { get; set; }
+        public string? ipc_error { get; set; }
     }
 
     public static class HookIpcClient
@@ -55,44 +56,25 @@ namespace ContextMenuProfiler.UI.Core
 
                 for (int attempt = 0; attempt < HookIpcSemantics.Runtime.MaxAttempts; attempt++)
                 {
-                    bool hasLock = false;
                     try
                     {
-                        var swLock = Stopwatch.StartNew();
-                        await IpcLock.WaitAsync();
-                        hasLock = true;
-                        swLock.Stop();
-                        result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
-
-                        bool success = await TryProbeOnceAsync(clsid, path, dllHint, result);
-                        if (success)
+                        if (await TryProbeWithLockAsync(clsid, path, dllHint, result))
                         {
                             return result;
                         }
-
-                        if (await DelayForRetryAsync(attempt))
-                        {
-                            continue;
-                        }
-
-                        return result;
                     }
                     catch (Exception ex)
                     {
+                        result.ipc_error = "critical_error";
                         Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
-                        if (await DelayForRetryAsync(attempt))
-                        {
-                            continue;
-                        }
-                        return result;
                     }
-                    finally
+
+                    if (await DelayForRetryAsync(attempt))
                     {
-                        if (hasLock)
-                        {
-                            IpcLock.Release();
-                        }
+                        continue;
                     }
+
+                    return result;
                 }
                 return result;
             }
@@ -100,6 +82,32 @@ namespace ContextMenuProfiler.UI.Core
             {
                 swTotal.Stop();
                 result.total_ms = Math.Max(0, (long)swTotal.Elapsed.TotalMilliseconds);
+            }
+        }
+
+        private static async Task<bool> TryProbeWithLockAsync(string clsid, string path, string? dllHint, HookCallResult result)
+        {
+            bool hasLock = false;
+            var swLock = Stopwatch.StartNew();
+            try
+            {
+                await IpcLock.WaitAsync();
+                hasLock = true;
+                swLock.Stop();
+                result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
+                return await TryProbeOnceAsync(clsid, path, dllHint, result);
+            }
+            finally
+            {
+                if (swLock.IsRunning)
+                {
+                    swLock.Stop();
+                }
+
+                if (hasLock)
+                {
+                    IpcLock.Release();
+                }
             }
         }
 
@@ -116,6 +124,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 swConnect.Stop();
                 result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
+                result.ipc_error = "connect_failed";
                 Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
                 return false;
             }
@@ -141,6 +150,7 @@ namespace ContextMenuProfiler.UI.Core
             }
             catch (Exception)
             {
+                result.ipc_error = "framed_exchange_failed";
                 CompleteRoundTrip(swRoundTrip, result);
                 return false;
             }
@@ -148,10 +158,12 @@ namespace ContextMenuProfiler.UI.Core
             string response = Encoding.UTF8.GetString(responsePayload).TrimEnd('\0');
             if (!TryDeserializeHookResponse(response, out var parsedResponse))
             {
+                result.ipc_error = "invalid_json_response";
                 CompleteRoundTrip(swRoundTrip, result);
                 return false;
             }
 
+            result.ipc_error = null;
             result.data = parsedResponse;
             CompleteRoundTrip(swRoundTrip, result);
             return true;
