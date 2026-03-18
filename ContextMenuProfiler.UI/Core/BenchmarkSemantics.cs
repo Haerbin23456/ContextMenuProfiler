@@ -94,6 +94,12 @@ namespace ContextMenuProfiler.UI.Core
             public const string Disabled = "[Disabled]";
         }
 
+        public static class Runtime
+        {
+            public const int MaxParallelProbeTasks = 8;
+            public const int IpcTimeoutLikeRoundtripThresholdMs = 1900;
+        }
+
         public static bool IsPackagedExtensionType(string? type)
         {
             if (string.IsNullOrWhiteSpace(type))

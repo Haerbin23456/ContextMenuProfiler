@@ -106,7 +106,7 @@ namespace ContextMenuProfiler.UI.Core
         {
             var allResults = new ConcurrentBag<BenchmarkResult>();
             var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
-            var semaphore = new SemaphoreSlim(8);
+            var semaphore = new SemaphoreSlim(BenchmarkSemantics.Runtime.MaxParallelProbeTasks);
 
             var comTasks = registryHandlers.Select(async clsidEntry =>
             {
@@ -284,7 +284,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 if (result.Status != BenchmarkSemantics.Status.LoadError && result.Status != BenchmarkSemantics.Status.OrphanedMissingDll)
                 {
-                    if (hookCall.roundtrip_ms >= 1900)
+                    if (hookCall.roundtrip_ms >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
                     {
                         result.Status = BenchmarkSemantics.Status.IpcTimeout;
                         result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";

@@ -137,6 +137,9 @@ foreach (var key in criticalKeys)
 string benchmarkServicePath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
 string benchmarkServiceSource = File.ReadAllText(benchmarkServicePath);
 
+string benchmarkSemanticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
+string benchmarkSemanticsSource = File.ReadAllText(benchmarkSemanticsPath);
+
 string packageScannerPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
 string packageScannerSource = File.ReadAllText(packageScannerPath);
 
@@ -160,6 +163,28 @@ AssertTrue(
 AssertTrue(
     !benchmarkServiceSource.Contains("return RunSystemBenchmark(ScanMode.Targeted)", StringComparison.Ordinal),
     "AnalyzeFileDoesNotFallbackToSystemScan"
+);
+
+AssertTrue(
+    benchmarkSemanticsSource.Contains("MaxParallelProbeTasks = 8", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IpcTimeoutLikeRoundtripThresholdMs = 1900", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesRuntimeProbeConstants"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.MaxParallelProbeTasks", StringComparison.Ordinal),
+    "BenchmarkServiceUsesMaxParallelProbeTasksConstant"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs", StringComparison.Ordinal),
+    "BenchmarkServiceUsesIpcTimeoutThresholdConstant"
+);
+
+AssertTrue(
+    !benchmarkServiceSource.Contains("new SemaphoreSlim(8)", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("hookCall.roundtrip_ms >= 1900", StringComparison.Ordinal),
+    "BenchmarkServiceNoRuntimeMagicNumericLiterals"
 );
 
 string[] forbiddenStatusMagicLiterals =
