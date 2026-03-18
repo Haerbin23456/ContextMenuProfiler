@@ -153,6 +153,7 @@ foreach (var key in criticalKeys)
 
 string benchmarkServiceSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkService.cs");
 string benchmarkSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
+string packageManifestSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\PackageManifestSemantics.cs");
 string benchmarkStatisticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
 string hookIpcClientSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
 string hookIpcSemanticsSource = ReadSource(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
@@ -247,6 +248,15 @@ AssertTrue(
 );
 
 AssertTrue(
+    packageManifestSemanticsSource.Contains("public static class PackageManifestSemantics", StringComparison.Ordinal)
+    && packageManifestSemanticsSource.Contains("FileName = \"AppxManifest.xml\"", StringComparison.Ordinal)
+    && packageManifestSemanticsSource.Contains("ContextMenuCategoryToken = \"fileExplorerContextMenus\"", StringComparison.Ordinal)
+    && packageManifestSemanticsSource.Contains("ContextMenuCategory = \"windows.fileExplorerContextMenus\"", StringComparison.Ordinal)
+    && packageManifestSemanticsSource.Contains("BuildPackagedComClassIndexPath", StringComparison.Ordinal),
+    "PackageManifestSemanticsDefinesManifestTokens"
+);
+
+AssertTrue(
     registryScannerSource.Contains("BenchmarkSemantics.RegistryLocationLabel.AllFiles", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
@@ -288,10 +298,26 @@ AssertTrue(
 );
 
 AssertTrue(
+    packageScannerSource.Contains("PackageManifestSemantics.Manifest.FileName", StringComparison.Ordinal)
+    && packageScannerSource.Contains("PackageManifestSemantics.Manifest.ContextMenuCategoryToken", StringComparison.Ordinal)
+    && packageScannerSource.Contains("PackageManifestSemantics.Manifest.ContextMenuCategory", StringComparison.Ordinal)
+    && packageScannerSource.Contains("PackageManifestSemantics.Manifest.ExtensionElement", StringComparison.Ordinal)
+    && packageScannerSource.Contains("PackageManifestSemantics.Manifest.CategoryAttribute", StringComparison.Ordinal)
+    && packageScannerSource.Contains("PackageManifestSemantics.RegistryPath.BuildPackagedComClassIndexPath", StringComparison.Ordinal),
+    "PackageScannerUsesPackageManifestSemantics"
+);
+
+AssertTrue(
     !packageScannerSource.Contains("\"directory\"", StringComparison.Ordinal)
     && !packageScannerSource.Contains("\"folder\"", StringComparison.Ordinal)
     && !packageScannerSource.Contains("\"directory\\\\background\"", StringComparison.Ordinal)
-    && !packageScannerSource.Contains("type == \"*\"", StringComparison.Ordinal),
+    && !packageScannerSource.Contains("type == \"*\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"AppxManifest.xml\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"fileExplorerContextMenus\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("\"windows.fileExplorerContextMenus\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("Name.LocalName == \"Extension\"", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("Attribute(\"Category\")", StringComparison.Ordinal)
+    && !packageScannerSource.Contains("OpenSubKey($@\"PackagedCom\\\\ClassIndex\\\\{clsid:B}\")", StringComparison.Ordinal),
     "PackageScannerNoInlineAssociationTypeLiterals"
 );
 

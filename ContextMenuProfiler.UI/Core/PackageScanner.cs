@@ -11,11 +11,11 @@ namespace ContextMenuProfiler.UI.Core
 {
     public class PackageScanner
     {
-        private static readonly XNamespace NS_DEFAULT = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
-        private static readonly XNamespace NS_UAP = "http://schemas.microsoft.com/appx/manifest/uap/windows10";
-        private static readonly XNamespace NS_DESKTOP4 = "http://schemas.microsoft.com/appx/manifest/desktop/windows10/4";
-        private static readonly XNamespace NS_DESKTOP5 = "http://schemas.microsoft.com/appx/manifest/desktop/windows10/5";
-        private static readonly XNamespace NS_COM = "http://schemas.microsoft.com/appx/manifest/com/windows10";
+        private static readonly XNamespace NS_DEFAULT = PackageManifestSemantics.Namespaces.Default;
+        private static readonly XNamespace NS_UAP = PackageManifestSemantics.Namespaces.Uap;
+        private static readonly XNamespace NS_DESKTOP4 = PackageManifestSemantics.Namespaces.Desktop4;
+        private static readonly XNamespace NS_DESKTOP5 = PackageManifestSemantics.Namespaces.Desktop5;
+        private static readonly XNamespace NS_COM = PackageManifestSemantics.Namespaces.Com;
 
         public static IEnumerable<BenchmarkResult> ScanPackagedExtensions(string? targetPath)
         {
@@ -51,11 +51,11 @@ namespace ContextMenuProfiler.UI.Core
             string? installPath = package.InstalledLocation?.Path;
             if (string.IsNullOrEmpty(installPath)) return;
 
-            string manifestPath = Path.Combine(installPath, "AppxManifest.xml");
+            string manifestPath = Path.Combine(installPath, PackageManifestSemantics.Manifest.FileName);
             if (!File.Exists(manifestPath)) return;
 
             string manifestContent = File.ReadAllText(manifestPath);
-            if (!manifestContent.Contains("fileExplorerContextMenus")) return;    
+            if (!manifestContent.Contains(PackageManifestSemantics.Manifest.ContextMenuCategoryToken)) return;
 
             // Handle Sparse Packages (like VS Code)
             // Deferred: only resolve EffectiveLocation for packages that actually have context menu extensions
@@ -67,8 +67,9 @@ namespace ContextMenuProfiler.UI.Core
             XDocument doc = XDocument.Parse(manifestContent);
             var clsidToPath = MapClsidToBinaryPath(doc, effectivePath);
             
-            var extensions = doc.Descendants().Where(e => e.Name.LocalName == "Extension" && 
-                             e.Attribute("Category")?.Value == "windows.fileExplorerContextMenus");
+            var extensions = doc.Descendants().Where(e =>
+                e.Name.LocalName == PackageManifestSemantics.Manifest.ExtensionElement
+                && e.Attribute(PackageManifestSemantics.Manifest.CategoryAttribute)?.Value == PackageManifestSemantics.Manifest.ContextMenuCategory);
 
             foreach (var extElement in extensions)
             {
@@ -79,16 +80,16 @@ namespace ContextMenuProfiler.UI.Core
         private static void ProcessExtensionElement(Package package, XElement extElement, List<BenchmarkResult> results, 
             Dictionary<Guid, string> clsidToPath, string installPath, string targetExt, bool scanAll)
         {
-            var itemTypes = extElement.Descendants().Where(e => e.Name.LocalName == "ItemType");
+            var itemTypes = extElement.Descendants().Where(e => e.Name.LocalName == PackageManifestSemantics.Manifest.ItemTypeElement);
 
             foreach (var itemType in itemTypes)
             {
-                string? type = itemType.Attribute("Type")?.Value?.ToLower();
+                string? type = itemType.Attribute(PackageManifestSemantics.Manifest.TypeAttribute)?.Value?.ToLowerInvariant();
                 if (string.IsNullOrEmpty(type)) continue;
 
                 if (!scanAll && !IsTypeMatch(type, targetExt)) continue;
 
-                var verbs = itemType.Descendants().Where(e => e.Name.LocalName == "Verb");
+                var verbs = itemType.Descendants().Where(e => e.Name.LocalName == PackageManifestSemantics.Manifest.VerbElement);
                 foreach (var verb in verbs)
                 {
                     if (TryParseVerb(package, verb, clsidToPath, installPath, out var result) && result != null)
@@ -104,13 +105,13 @@ namespace ContextMenuProfiler.UI.Core
             string installPath, out BenchmarkResult? result)
         {
             result = null;
-            string? clsidStr = verb.Attribute("Clsid")?.Value;
+            string? clsidStr = verb.Attribute(PackageManifestSemantics.Manifest.ClsidAttribute)?.Value;
             if (!Guid.TryParse(clsidStr, out Guid clsid)) return false;
 
             string name = package.DisplayName;
             if (string.IsNullOrEmpty(name)) name = package.Id.Name;
             
-            string? verbId = verb.Attribute("Id")?.Value;
+            string? verbId = verb.Attribute(PackageManifestSemantics.Manifest.IdAttribute)?.Value;
             if (!string.IsNullOrEmpty(verbId)) name += $" ({verbId})";
 
             string? logoPath = ResolveBestLogo(package, verb.Document, installPath);
@@ -157,26 +158,28 @@ namespace ContextMenuProfiler.UI.Core
 
         private static string? ExtractRelativeLogoFromManifest(XDocument doc)
         {
-            var visualElements = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "VisualElements");
+            var visualElements = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == PackageManifestSemantics.Manifest.VisualElementsElement);
             if (visualElements != null)
             {
-                return visualElements.Attribute("Square44x44Logo")?.Value
-                    ?? visualElements.Attribute("Square150x150Logo")?.Value
-                    ?? visualElements.Attribute("Logo")?.Value;
+                return visualElements.Attribute(PackageManifestSemantics.Manifest.Square44LogoAttribute)?.Value
+                    ?? visualElements.Attribute(PackageManifestSemantics.Manifest.Square150LogoAttribute)?.Value
+                    ?? visualElements.Attribute(PackageManifestSemantics.Manifest.LogoElement)?.Value;
             }
 
-            return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Logo")?.Value;
+            return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == PackageManifestSemantics.Manifest.LogoElement)?.Value;
         }
 
         private static Dictionary<Guid, string> MapClsidToBinaryPath(XDocument doc, string installPath)
         {
             var map = new Dictionary<Guid, string>();
-            var classes = doc.Descendants().Where(e => e.Name.LocalName == "Class" && e.Name.Namespace == NS_COM);
+            var classes = doc.Descendants().Where(e =>
+                e.Name.LocalName == PackageManifestSemantics.Manifest.ClassElement
+                && e.Name.Namespace == NS_COM);
 
             foreach (var cls in classes)
             {
-                string? idStr = cls.Attribute("Id")?.Value;
-                string? path = cls.Attribute("Path")?.Value;
+                string? idStr = cls.Attribute(PackageManifestSemantics.Manifest.IdAttribute)?.Value;
+                string? path = cls.Attribute(PackageManifestSemantics.Manifest.PathAttribute)?.Value;
                 if (Guid.TryParse(idStr, out Guid guid) && !string.IsNullOrEmpty(path))
                 {
                     map[guid] = path;
@@ -227,7 +230,7 @@ namespace ContextMenuProfiler.UI.Core
         {
             try
             {
-                using var key = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\ClassIndex\{clsid:B}");
+                using var key = Registry.ClassesRoot.OpenSubKey(PackageManifestSemantics.RegistryPath.BuildPackagedComClassIndexPath(clsid));
                 return key?.GetValue("") as string;
             }
             catch { return null; }
