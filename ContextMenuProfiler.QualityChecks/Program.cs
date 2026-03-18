@@ -182,6 +182,14 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("StaticVerbRegistryShellPrefix = \"Registry (Shell) - \"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("StaticVerbDisabledKeyPrefix = \"-\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("BuildStaticVerbRegistryLocation", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IsStaticVerbRegistryPathDisabled", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesStaticVerbRegistryHelpers"
+);
+
+AssertTrue(
     !benchmarkSemanticsSource.Contains("bool hasDrive = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFolder = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFile = false;", StringComparison.Ordinal),
@@ -281,6 +289,19 @@ AssertTrue(
     benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal)
     && benchmarkServiceSource.Contains("TryParseStaticVerbKey(key, out string name, out string command)", StringComparison.Ordinal),
     "BenchmarkServiceUsesStaticVerbKeyParser"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled)", StringComparison.Ordinal),
+    "BenchmarkServiceUsesStaticVerbRegistrySemanticHelpers"
+);
+
+AssertTrue(
+    !benchmarkServiceSource.Contains("Registry (Shell) -", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("p.Split('\\\\')[0]", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("p.Split('\\\\').Last().StartsWith(\"-\")", StringComparison.Ordinal),
+    "BenchmarkServiceNoInlineStaticVerbRegistryLiterals"
 );
 
 AssertTrue(

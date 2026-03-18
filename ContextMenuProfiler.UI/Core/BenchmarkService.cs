@@ -169,7 +169,7 @@ namespace ContextMenuProfiler.UI.Core
                     RegistryEntries = paths.Select(p => new RegistryHandlerInfo
                     {
                         Path = p,
-                        Location = $"Registry (Shell) - {p.Split('\\')[0]}"
+                        Location = BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)
                     }).ToList(),
                     InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
                     DetailedStatus = LocalizationService.Instance["Dashboard.Detail.StaticNotMeasured"],
@@ -177,7 +177,7 @@ namespace ContextMenuProfiler.UI.Core
                     Category = BenchmarkSemantics.Category.Static
                 };
 
-                bool anyDisabled = paths.Any(p => p.Split('\\').Last().StartsWith("-"));
+                bool anyDisabled = paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled);
                 verbResult.IsEnabled = !anyDisabled;
                 verbResult.LocationSummary = string.Join(", ", verbResult.RegistryEntries.Select(e => e.Location).Distinct());
                 verbResult.IconLocation = ResolveStaticVerbIcon(paths.First(), verbResult.BinaryPath);

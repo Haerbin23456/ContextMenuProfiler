@@ -109,11 +109,13 @@ namespace ContextMenuProfiler.UI.Core
         public static class LocationSummary
         {
             public const string ModernShellUwp = "Modern Shell (UWP)";
+            public const string StaticVerbRegistryShellPrefix = "Registry (Shell) - ";
         }
 
         public static class RegistryLocationToken
         {
             public const string Disabled = "[Disabled]";
+            public const string StaticVerbDisabledKeyPrefix = "-";
         }
 
         public static class Runtime
@@ -148,6 +150,27 @@ namespace ContextMenuProfiler.UI.Core
         {
             return !string.IsNullOrWhiteSpace(location)
                 && location.Contains(RegistryLocationToken.Disabled, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string BuildStaticVerbRegistryLocation(string? registryPath)
+        {
+            string hive = ExtractRegistryHive(registryPath);
+            return LocationSummary.StaticVerbRegistryShellPrefix + hive;
+        }
+
+        public static bool IsStaticVerbRegistryPathDisabled(string? registryPath)
+        {
+            if (string.IsNullOrWhiteSpace(registryPath))
+            {
+                return false;
+            }
+
+            int lastSeparatorIndex = registryPath.LastIndexOf('\\');
+            string terminalSegment = lastSeparatorIndex >= 0
+                ? registryPath[(lastSeparatorIndex + 1)..]
+                : registryPath;
+
+            return terminalSegment.StartsWith(RegistryLocationToken.StaticVerbDisabledKeyPrefix, StringComparison.Ordinal);
         }
 
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)
@@ -278,6 +301,22 @@ namespace ContextMenuProfiler.UI.Core
             }
 
             return false;
+        }
+
+        private static string ExtractRegistryHive(string? registryPath)
+        {
+            if (string.IsNullOrWhiteSpace(registryPath))
+            {
+                return string.Empty;
+            }
+
+            int firstSeparatorIndex = registryPath.IndexOf('\\');
+            if (firstSeparatorIndex <= 0)
+            {
+                return registryPath;
+            }
+
+            return registryPath[..firstSeparatorIndex];
         }
     }
 }
