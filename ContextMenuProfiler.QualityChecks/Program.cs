@@ -143,6 +143,12 @@ string benchmarkSemanticsSource = File.ReadAllText(benchmarkSemanticsPath);
 string benchmarkStatisticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
 string benchmarkStatisticsSource = File.ReadAllText(benchmarkStatisticsPath);
 
+string hookIpcClientPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\HookIpcClient.cs");
+string hookIpcClientSource = File.ReadAllText(hookIpcClientPath);
+
+string hookIpcSemanticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\HookIpcSemantics.cs");
+string hookIpcSemanticsSource = File.ReadAllText(hookIpcSemanticsPath);
+
 string packageScannerPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
 string packageScannerSource = File.ReadAllText(packageScannerPath);
 
@@ -178,6 +184,32 @@ AssertTrue(
     benchmarkStatisticsSource.Contains("public static class BenchmarkStatisticsCalculator", StringComparison.Ordinal)
     && benchmarkStatisticsSource.Contains("public static BenchmarkStatistics Calculate", StringComparison.Ordinal),
     "BenchmarkStatisticsCalculatorExists"
+);
+
+AssertTrue(
+    hookIpcSemanticsSource.Contains("VersionPrefix = \"CMP1\"", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("ModeAuto = \"AUTO\"", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("PipeName = \"ContextMenuProfilerHook\"", StringComparison.Ordinal),
+    "HookIpcSemanticsDefinesProtocolAndPipeConstants"
+);
+
+AssertTrue(
+    hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxConcurrentCalls", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxAttempts", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.RetryDelayMs", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Protocol.VersionPrefix", StringComparison.Ordinal),
+    "HookIpcClientUsesIpcSemanticsConstants"
+);
+
+AssertTrue(
+    !hookIpcClientSource.Contains("private const string ProtocolPrefix", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("private const string ProtocolMode", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("private const string PipeName", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("private const int ConnectTimeoutMs", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("private const int RoundTripTimeoutMs", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("Task.Delay(80)", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("attempt == 0", StringComparison.Ordinal),
+    "HookIpcClientNoLegacyInlineProtocolRuntimeLiterals"
 );
 
 AssertTrue(

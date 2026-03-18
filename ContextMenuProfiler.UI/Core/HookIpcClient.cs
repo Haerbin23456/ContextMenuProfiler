@@ -36,12 +36,9 @@ namespace ContextMenuProfiler.UI.Core
 
     public static class HookIpcClient
     {
-        private const string ProtocolPrefix = "CMP1";
-        private const string ProtocolMode = "AUTO";
-        private const string PipeName = "ContextMenuProfilerHook";
-        private const int ConnectTimeoutMs = 1200;
-        private const int RoundTripTimeoutMs = 2000;
-        internal static readonly SemaphoreSlim IpcLock = new SemaphoreSlim(3, 3);
+        internal static readonly SemaphoreSlim IpcLock = new SemaphoreSlim(
+            HookIpcSemantics.Runtime.MaxConcurrentCalls,
+            HookIpcSemantics.Runtime.MaxConcurrentCalls);
 
         public static async Task<HookCallResult> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null)
         {
@@ -56,7 +53,7 @@ namespace ContextMenuProfiler.UI.Core
                     try { File.WriteAllText(path, "probe"); } catch {}
                 }
 
-                for (int attempt = 0; attempt < 2; attempt++)
+                for (int attempt = 0; attempt < HookIpcSemantics.Runtime.MaxAttempts; attempt++)
                 {
                     bool hasLock = false;
                     try
@@ -67,21 +64,21 @@ namespace ContextMenuProfiler.UI.Core
                         swLock.Stop();
                         result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
 
-                        using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+                        using (var client = new NamedPipeClientStream(".", HookIpcSemantics.Runtime.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
                         {
                             var swConnect = Stopwatch.StartNew();
                             try 
                             {
-                                await client.ConnectAsync(ConnectTimeoutMs);
+                                await client.ConnectAsync(HookIpcSemantics.Runtime.ConnectTimeoutMs);
                             }
                             catch (Exception ex)
                             {
                                 swConnect.Stop();
                                 result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
                                 Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
-                                if (attempt == 0)
+                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                                 {
-                                    await Task.Delay(80);
+                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -97,7 +94,7 @@ namespace ContextMenuProfiler.UI.Core
                             }
 
                             var swRoundTrip = Stopwatch.StartNew();
-                            using var roundTripCts = new CancellationTokenSource(RoundTripTimeoutMs);
+                            using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
                             string requestStr = BuildRequest(clsid, path, dllHint);
                             byte[] request = Encoding.UTF8.GetBytes(requestStr);
                             await client.WriteAsync(request, 0, request.Length, roundTripCts.Token);
@@ -112,9 +109,9 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt == 0)
+                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                                 {
-                                    await Task.Delay(80);
+                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -124,9 +121,9 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt == 0)
+                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                                 {
-                                    await Task.Delay(80);
+                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -143,9 +140,9 @@ namespace ContextMenuProfiler.UI.Core
                                 }
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt == 0)
+                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                                 {
-                                    await Task.Delay(80);
+                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -154,9 +151,9 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt == 0)
+                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                                 {
-                                    await Task.Delay(80);
+                                    await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
                                 }
                                 return result;
@@ -166,9 +163,9 @@ namespace ContextMenuProfiler.UI.Core
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
-                        if (attempt == 0)
+                        if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
                         {
-                            await Task.Delay(80);
+                            await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                             continue;
                         }
                         return result;
@@ -201,11 +198,15 @@ namespace ContextMenuProfiler.UI.Core
 
         internal static string BuildRequest(string clsid, string path, string? dllHint)
         {
+            string header =
+                $"{HookIpcSemantics.Protocol.VersionPrefix}{HookIpcSemantics.Protocol.FieldDelimiter}{HookIpcSemantics.Protocol.ModeAuto}";
+
             if (string.IsNullOrEmpty(dllHint))
             {
-                return $"{ProtocolPrefix}|{ProtocolMode}|{clsid}|{path}";
+                return $"{header}{HookIpcSemantics.Protocol.FieldDelimiter}{clsid}{HookIpcSemantics.Protocol.FieldDelimiter}{path}";
             }
-            return $"{ProtocolPrefix}|{ProtocolMode}|{clsid}|{path}|{dllHint}";
+
+            return $"{header}{HookIpcSemantics.Protocol.FieldDelimiter}{clsid}{HookIpcSemantics.Protocol.FieldDelimiter}{path}{HookIpcSemantics.Protocol.FieldDelimiter}{dllHint}";
         }
 
         internal static string? ExtractJsonEnvelope(string response)

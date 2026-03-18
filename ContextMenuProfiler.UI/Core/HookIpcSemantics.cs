@@ -1,0 +1,22 @@
+namespace ContextMenuProfiler.UI.Core
+{
+    public static class HookIpcSemantics
+    {
+        public static class Protocol
+        {
+            public const string VersionPrefix = "CMP1";
+            public const string ModeAuto = "AUTO";
+            public const char FieldDelimiter = '|';
+        }
+
+        public static class Runtime
+        {
+            public const string PipeName = "ContextMenuProfilerHook";
+            public const int ConnectTimeoutMs = 1200;
+            public const int RoundTripTimeoutMs = 2000;
+            public const int MaxConcurrentCalls = 3;
+            public const int MaxAttempts = 2;
+            public const int RetryDelayMs = 80;
+        }
+    }
+}
