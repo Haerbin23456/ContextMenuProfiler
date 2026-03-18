@@ -39,14 +39,6 @@ static string ReadSource(string relativePath)
     return File.ReadAllText(FindFileUpward(relativePath));
 }
 
-static void AssertNull(string? value, string caseName)
-{
-    if (value != null)
-    {
-        throw new InvalidOperationException($"{caseName} failed. expected null, actual='{value}'");
-    }
-}
-
 static void AssertSourceDoesNotContainAny(string source, string caseName, params string[] forbiddenLiterals)
 {
     var hit = forbiddenLiterals.Where(l => source.Contains($"\"{l}\"", StringComparison.Ordinal)).ToList();
@@ -68,12 +60,6 @@ AssertEqual("CMP1|AUTO|{00000000-0000-0000-0000-000000000000}|C:\\Temp\\a.txt", 
 
 string requestWithHint = HookIpcClient.BuildRequest("{00000000-0000-0000-0000-000000000000}", @"C:\Temp\a.txt", @"C:\x\h.dll");
 AssertEqual("CMP1|AUTO|{00000000-0000-0000-0000-000000000000}|C:\\Temp\\a.txt|C:\\x\\h.dll", requestWithHint, "BuildRequestWithHint");
-
-string? malformed = HookIpcClient.ExtractJsonEnvelope("ERR|NOT_JSON");
-AssertNull(malformed, "ExtractJsonMalformed");
-
-string? wrapped = HookIpcClient.ExtractJsonEnvelope("noise{\"success\":true,\"state\":1}tail");
-AssertEqual("{\"success\":true,\"state\":1}", wrapped ?? "", "ExtractJsonWrapped");
 
 AssertEqual(
     BenchmarkSemantics.Category.Background,
@@ -442,8 +428,9 @@ AssertTrue(
     && hookIpcSemanticsSource.Contains("PipeName = \"ContextMenuProfilerHook\"", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("ProbeFileName = \"ContextMenuProfiler_probe.txt\"", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("ProbeFileContent = \"probe\"", StringComparison.Ordinal)
-    && hookIpcSemanticsSource.Contains("InitialResponseCapacity = 1024", StringComparison.Ordinal)
-    && hookIpcSemanticsSource.Contains("ReadChunkSize = 4096", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("FrameHeaderBytes = 4", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("MaxRequestBytes = 16384", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("MaxResponseBytes = 65536", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("MultiValueDelimiter = '|'", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("NoIconToken = \"NONE\"", StringComparison.Ordinal),
     "HookIpcSemanticsDefinesProtocolAndPipeConstants"
@@ -456,9 +443,13 @@ AssertTrue(
     && hookIpcClientSource.Contains("HookIpcSemantics.Protocol.VersionPrefix", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileName", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileContent", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.InitialResponseCapacity", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ReadChunkSize", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.FrameHeaderBytes", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxRequestBytes", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxResponseBytes", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Response.MultiValueDelimiter", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("WriteFrameAsync", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("ReadFrameAsync", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("ReadExactAsync", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("private static async Task<bool> DelayForRetryAsync", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal)
@@ -479,6 +470,9 @@ AssertTrue(
     && !hookIpcClientSource.Contains("ContextMenuProfiler_probe.txt", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("ExtractJsonEnvelope(", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("ReadResponseAsync(", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("client.IsMessageComplete", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("if (ShouldRetry(attempt))", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("data.names.Split('|',", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);\r\n                                if (await DelayForRetryAsync(attempt))", StringComparison.Ordinal),

@@ -21,6 +21,9 @@ namespace ContextMenuProfiler.UI.Core
             public const string ProbeFileContent = "probe";
             public const int InitialResponseCapacity = 1024;
             public const int ReadChunkSize = 4096;
+            public const int FrameHeaderBytes = 4;
+            public const int MaxRequestBytes = 16384;
+            public const int MaxResponseBytes = 65536;
         }
 
         public static class Response

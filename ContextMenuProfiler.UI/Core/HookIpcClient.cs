@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.IO.Pipes;
+using System.Buffers.Binary;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
@@ -83,25 +84,15 @@ namespace ContextMenuProfiler.UI.Core
                             }
                             swConnect.Stop();
                             result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
-                            try
-                            {
-                                client.ReadMode = PipeTransmissionMode.Message;
-                            }
-                            catch
-                            {
-                            }
-
                             var swRoundTrip = Stopwatch.StartNew();
                             using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
                             string requestStr = BuildRequest(clsid, path, dllHint);
-                            byte[] request = Encoding.UTF8.GetBytes(requestStr);
-                            await client.WriteAsync(request, 0, request.Length, roundTripCts.Token);
-                            await client.FlushAsync(roundTripCts.Token);
-
-                            string response;
+                            byte[] requestPayload = Encoding.UTF8.GetBytes(requestStr);
+                            byte[] responsePayload;
                             try
                             {
-                                response = await ReadResponseAsync(client, roundTripCts.Token);
+                                await WriteFrameAsync(client, requestPayload, roundTripCts.Token);
+                                responsePayload = await ReadFrameAsync(client, roundTripCts.Token);
                             }
                             catch (OperationCanceledException)
                             {
@@ -111,6 +102,8 @@ namespace ContextMenuProfiler.UI.Core
                                 }
                                 return result;
                             }
+
+                            string response = Encoding.UTF8.GetString(responsePayload).TrimEnd('\0');
 
                             if (string.IsNullOrWhiteSpace(response))
                             {
@@ -122,10 +115,9 @@ namespace ContextMenuProfiler.UI.Core
                             }
                             try
                             {
-                                string? json = ExtractJsonEnvelope(response);
-                                if (!string.IsNullOrEmpty(json))
+                                result.data = JsonSerializer.Deserialize<HookResponse>(response);
+                                if (result.data != null)
                                 {
-                                    result.data = JsonSerializer.Deserialize<HookResponse>(json);
                                     CompleteRoundTrip(swRoundTrip, result);
                                     return result;
                                 }
@@ -221,35 +213,64 @@ namespace ContextMenuProfiler.UI.Core
             return $"{header}{HookIpcSemantics.Protocol.FieldDelimiter}{clsid}{HookIpcSemantics.Protocol.FieldDelimiter}{path}{HookIpcSemantics.Protocol.FieldDelimiter}{dllHint}";
         }
 
-        internal static string? ExtractJsonEnvelope(string response)
+        private static async Task WriteFrameAsync(NamedPipeClientStream client, byte[] payload, CancellationToken token)
         {
-            int start = response.IndexOf('{');
-            int end = response.LastIndexOf('}');
-            if (start == -1 || end == -1 || end <= start) return null;
-            return response.Substring(start, end - start + 1);
+            if (payload.Length > HookIpcSemantics.Runtime.MaxRequestBytes)
+            {
+                throw new InvalidDataException("IPC request is too large.");
+            }
+
+            byte[] header = new byte[HookIpcSemantics.Runtime.FrameHeaderBytes];
+            BinaryPrimitives.WriteInt32LittleEndian(header, payload.Length);
+
+            await client.WriteAsync(header, 0, header.Length, token);
+            await client.WriteAsync(payload, 0, payload.Length, token);
+            await client.FlushAsync(token);
         }
 
-        private static async Task<string> ReadResponseAsync(NamedPipeClientStream client, CancellationToken token)
+        private static async Task<byte[]> ReadFrameAsync(NamedPipeClientStream client, CancellationToken token)
         {
-            var sb = new StringBuilder(HookIpcSemantics.Runtime.InitialResponseCapacity);
-            byte[] buffer = new byte[HookIpcSemantics.Runtime.ReadChunkSize];
-            while (true)
+            byte[] header = new byte[HookIpcSemantics.Runtime.FrameHeaderBytes];
+            if (!await ReadExactAsync(client, header, header.Length, token))
             {
-                int read = await client.ReadAsync(buffer, 0, buffer.Length, token);
-                if (read <= 0) break;
-                sb.Append(Encoding.UTF8.GetString(buffer, 0, read));
-                bool isMessageComplete = false;
-                try
-                {
-                    isMessageComplete = client.IsMessageComplete;
-                }
-                catch
-                {
-                    isMessageComplete = read < buffer.Length;
-                }
-                if (isMessageComplete) break;
+                return Array.Empty<byte>();
             }
-            return sb.ToString().TrimEnd('\0');
+
+            int payloadLength = BinaryPrimitives.ReadInt32LittleEndian(header);
+            if (payloadLength < 0 || payloadLength > HookIpcSemantics.Runtime.MaxResponseBytes)
+            {
+                throw new InvalidDataException("IPC response length is invalid.");
+            }
+
+            if (payloadLength == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            byte[] payload = new byte[payloadLength];
+            if (!await ReadExactAsync(client, payload, payloadLength, token))
+            {
+                throw new EndOfStreamException("IPC response ended before the frame payload was fully read.");
+            }
+
+            return payload;
+        }
+
+        private static async Task<bool> ReadExactAsync(Stream stream, byte[] buffer, int bytesToRead, CancellationToken token)
+        {
+            int offset = 0;
+            while (offset < bytesToRead)
+            {
+                int read = await stream.ReadAsync(buffer, offset, bytesToRead - offset, token);
+                if (read <= 0)
+                {
+                    return false;
+                }
+
+                offset += read;
+            }
+
+            return true;
         }
     }
 }

@@ -5,14 +5,60 @@
 static const LONG kMaxConcurrentPipeClients = 4;
 static volatile LONG g_ActivePipeClients = 0;
 static const DWORD kWorkerTimeoutMs = 1800;
+static const DWORD kFrameHeaderBytes = 4;
 static const size_t kMaxRequestBytes = 16384;
+static const size_t kMaxResponseBytes = 65536;
 
 struct IpcWorkItem {
-    char request[2048];
+    std::string request;
     char response[65536];
     int maxLen;
     volatile LONG releaseByWorker;
 };
+
+static bool ReadExactFromPipe(HANDLE hPipe, void* buffer, DWORD bytesToRead) {
+    BYTE* cursor = reinterpret_cast<BYTE*>(buffer);
+    DWORD totalRead = 0;
+    while (totalRead < bytesToRead) {
+        DWORD chunkRead = 0;
+        BOOL ok = ReadFile(hPipe, cursor + totalRead, bytesToRead - totalRead, &chunkRead, NULL);
+        if (!ok || chunkRead == 0) {
+            return false;
+        }
+
+        totalRead += chunkRead;
+    }
+
+    return true;
+}
+
+static bool WriteFrameToPipe(HANDLE hPipe, const char* payload, DWORD payloadLength) {
+    if (payloadLength > static_cast<DWORD>(kMaxResponseBytes)) {
+        return false;
+    }
+
+    DWORD written = 0;
+    DWORD frameLength = payloadLength;
+    if (!WriteFile(hPipe, &frameLength, kFrameHeaderBytes, &written, NULL) || written != kFrameHeaderBytes) {
+        return false;
+    }
+
+    if (payloadLength == 0) {
+        FlushFileBuffers(hPipe);
+        return true;
+    }
+
+    if (!WriteFile(hPipe, payload, payloadLength, &written, NULL) || written != payloadLength) {
+        return false;
+    }
+
+    FlushFileBuffers(hPipe);
+    return true;
+}
+
+static void WriteJsonFrameToPipe(HANDLE hPipe, const char* json) {
+    WriteFrameToPipe(hPipe, json, static_cast<DWORD>(strlen(json)));
+}
 
 void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
     std::string reqStr = request;
@@ -26,28 +72,27 @@ void DoIpcWorkInternal(const char* request, char* response, int maxLen) {
         return;
     }
 
-    std::string mode = "AUTO";
+    std::string mode;
     std::string clsidStr, pathStr, dllHintStr;
-    bool v1Protocol = false;
 
-    if (reqStr.rfind("CMP1|", 0) == 0) {
-        v1Protocol = true;
-        reqStr = reqStr.substr(5);
-        size_t sep0 = reqStr.find('|');
-        if (sep0 == std::string::npos) {
-            snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_FORMAT\",\"error\":\"Missing Mode\"}");
-            return;
-        }
-        mode = reqStr.substr(0, sep0);
-        reqStr = reqStr.substr(sep0 + 1);
+    if (reqStr.rfind("CMP1|", 0) != 0) {
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_PROTOCOL\",\"error\":\"Unsupported Protocol\"}");
+        return;
     }
 
-    if (!v1Protocol && reqStr.substr(0, 4) == "COM|") {
-        mode = "COM";
-        reqStr = reqStr.substr(4);
-    } else if (!v1Protocol && reqStr.substr(0, 5) == "ECMD|") {
-        mode = "ECMD";
-        reqStr = reqStr.substr(5);
+    reqStr = reqStr.substr(5);
+    size_t sep0 = reqStr.find('|');
+    if (sep0 == std::string::npos) {
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_FORMAT\",\"error\":\"Missing Mode\"}");
+        return;
+    }
+
+    mode = reqStr.substr(0, sep0);
+    reqStr = reqStr.substr(sep0 + 1);
+
+    if (mode != "AUTO" && mode != "COM" && mode != "ECMD") {
+        snprintf(response, maxLen, "{\"success\":false,\"code\":\"E_MODE\",\"error\":\"Unsupported Mode\"}");
+        return;
     }
 
     // Format: CLSID|Path[|DllHint]
@@ -122,7 +167,7 @@ void DoIpcWork(const char* request, char* response, int maxLen) {
 DWORD WINAPI DoIpcWorkThread(LPVOID param) {
     IpcWorkItem* item = (IpcWorkItem*)param;
     item->response[0] = '\0';
-    DoIpcWork(item->request, item->response, item->maxLen);
+    DoIpcWork(item->request.c_str(), item->response, item->maxLen);
     if (InterlockedCompareExchange(&item->releaseByWorker, 0, 0) == 1) {
         delete item;
     }
@@ -133,73 +178,45 @@ DWORD WINAPI HandlePipeClientThread(LPVOID param) {
     HANDLE hPipe = (HANDLE)param;
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
-    std::string req;
-    req.reserve(2048);
-    DWORD read = 0;
-    DWORD written = 0;
-
-    while (true) {
-        char chunk[2048];
-        BOOL ok = ReadFile(hPipe, chunk, sizeof(chunk), &read, NULL);
-        if (ok && read > 0) {
-            req.append(chunk, read);
-            if (req.size() > kMaxRequestBytes) {
-                const char* errRes = "{\"success\":false,\"code\":\"E_REQ_TOO_LARGE\",\"error\":\"Request Too Large\"}";
-                WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
-                FlushFileBuffers(hPipe);
-                req.clear();
-                break;
-            }
-            break;
-        }
-        DWORD err = GetLastError();
-        if (!ok && err == ERROR_MORE_DATA) {
-            if (read > 0) {
-                req.append(chunk, read);
-            }
-            if (req.size() > kMaxRequestBytes) {
-                const char* errRes = "{\"success\":false,\"code\":\"E_REQ_TOO_LARGE\",\"error\":\"Request Too Large\"}";
-                WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
-                FlushFileBuffers(hPipe);
-                req.clear();
-                break;
-            }
-            continue;
-        }
-        break;
-    }
-
-    if (!req.empty()) {
-        req.push_back('\0');
+    DWORD requestLength = 0;
+    if (ReadExactFromPipe(hPipe, &requestLength, kFrameHeaderBytes)) {
+        if (requestLength == 0 || requestLength > static_cast<DWORD>(kMaxRequestBytes)) {
+            WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"code\":\"E_REQ_TOO_LARGE\",\"error\":\"Request Too Large\"}");
+        } else {
+            std::string req(requestLength, '\0');
+            if (!ReadExactFromPipe(hPipe, &req[0], requestLength)) {
+                WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"code\":\"E_REQ_READ\",\"error\":\"Request Read Failed\"}");
+            } else {
         IpcWorkItem* workItem = new IpcWorkItem();
-        strncpy_s(workItem->request, sizeof(workItem->request), req.c_str(), _TRUNCATE);
+                workItem->request = std::move(req);
         workItem->response[0] = '\0';
-        workItem->maxLen = 65535;
+        workItem->maxLen = static_cast<int>(kMaxResponseBytes) - 1;
         workItem->releaseByWorker = 0;
 
         HANDLE hWorkThread = CreateThread(NULL, 0, DoIpcWorkThread, workItem, 0, NULL);
         if (!hWorkThread) {
-            const char* errRes = "{\"success\":false,\"error\":\"Hook Worker Launch Failed\"}";
-            WriteFile(hPipe, errRes, (DWORD)strlen(errRes), &written, NULL);
-            FlushFileBuffers(hPipe);
+                    WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"error\":\"Hook Worker Launch Failed\"}");
             delete workItem;
         } else {
             DWORD waitRc = WaitForSingleObject(hWorkThread, kWorkerTimeoutMs);
             if (waitRc == WAIT_OBJECT_0) {
-                int resLen = (int)strlen(workItem->response);
+                DWORD resLen = static_cast<DWORD>(strnlen_s(workItem->response, workItem->maxLen));
                 if (resLen > 0) {
-                    WriteFile(hPipe, workItem->response, (DWORD)resLen, &written, NULL);
-                    FlushFileBuffers(hPipe);
+                            WriteFrameToPipe(hPipe, workItem->response, resLen);
+                        } else {
+                            WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"error\":\"Empty Hook Response\"}");
                 }
                 delete workItem;
             } else {
-                const char* timeoutRes = "{\"success\":false,\"error\":\"Hook Worker Timeout\"}";
-                WriteFile(hPipe, timeoutRes, (DWORD)strlen(timeoutRes), &written, NULL);
-                FlushFileBuffers(hPipe);
+                        WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"error\":\"Hook Worker Timeout\"}");
                 InterlockedExchange(&workItem->releaseByWorker, 1);
             }
             CloseHandle(hWorkThread);
         }
+            }
+        }
+    } else {
+        WriteJsonFrameToPipe(hPipe, "{\"success\":false,\"code\":\"E_REQ_HEADER\",\"error\":\"Request Header Read Failed\"}");
     }
 
     DisconnectNamedPipe(hPipe);
@@ -215,17 +232,12 @@ DWORD WINAPI PipeThread(LPVOID) {
     Gdiplus::GdiplusStartupInput gsi;
     Gdiplus::GdiplusStartup(&g_GdiplusToken, &gsi, NULL);
 
-    PSECURITY_DESCRIPTOR pSD = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
-    InitializeSecurityDescriptor(pSD, SECURITY_DESCRIPTOR_REVISION);
-    SetSecurityDescriptorDacl(pSD, TRUE, NULL, FALSE);
-    SECURITY_ATTRIBUTES sa = { sizeof(sa), pSD, FALSE };
-
     while (!g_ShouldExit) {
         HANDLE hPipe = CreateNamedPipeA(
             "\\\\.\\pipe\\ContextMenuProfilerHook",
             PIPE_ACCESS_DUPLEX,
             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
-            PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, &sa);
+            PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, NULL);
         if (hPipe == INVALID_HANDLE_VALUE) { Sleep(100); continue; }
         
         if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED) {
@@ -237,9 +249,7 @@ DWORD WINAPI PipeThread(LPVOID) {
             if (active > kMaxConcurrentPipeClients) {
                 InterlockedDecrement(&g_ActivePipeClients);
                 const char* busyRes = "{\"success\":false,\"error\":\"Hook Busy\"}";
-                DWORD written = 0;
-                WriteFile(hPipe, busyRes, (DWORD)strlen(busyRes), &written, NULL);
-                FlushFileBuffers(hPipe);
+                WriteJsonFrameToPipe(hPipe, busyRes);
                 DisconnectNamedPipe(hPipe);
                 CloseHandle(hPipe);
                 continue;
@@ -258,7 +268,6 @@ DWORD WINAPI PipeThread(LPVOID) {
 
     Gdiplus::GdiplusShutdown(g_GdiplusToken);
     MH_Uninitialize();
-    LocalFree(pSD);
     CoUninitialize();
     LogToFile(L"--- Pipe Thread Exited Cleanly ---\n");
     return 0;
