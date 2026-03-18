@@ -5,6 +5,28 @@ namespace ContextMenuProfiler.UI.Core
 {
     public static class BenchmarkSemantics
     {
+        private static readonly string[] FolderLocationHints =
+        {
+            CategoryLocationHint.Directory,
+            CategoryLocationHint.Folder
+        };
+
+        private static readonly string[] FileLocationHints =
+        {
+            CategoryLocationHint.AllFiles,
+            CategoryLocationHint.Extension,
+            CategoryLocationHint.AllFileSystemObjects
+        };
+
+        private static class CategoryPriority
+        {
+            public const int Unknown = 0;
+            public const int File = 1;
+            public const int Folder = 2;
+            public const int Drive = 3;
+            public const int Background = 4;
+        }
+
         public const string StatusRegistryFallback = Status.RegistryFallback;
         public const string StatusHookLoadedNoMenu = Status.HookLoadedNoMenu;
         public const string StatusLoadError = Status.LoadError;
@@ -190,9 +212,7 @@ namespace ContextMenuProfiler.UI.Core
                 return Category.File;
             }
 
-            bool hasDrive = false;
-            bool hasFolder = false;
-            bool hasFile = false;
+            int resolvedPriority = CategoryPriority.Unknown;
 
             foreach (var location in locations)
             {
@@ -201,46 +221,63 @@ namespace ContextMenuProfiler.UI.Core
                     continue;
                 }
 
-                if (location.Contains(CategoryLocationHint.Background, StringComparison.OrdinalIgnoreCase))
+                int locationPriority = ResolveLocationPriority(location);
+                if (locationPriority == CategoryPriority.Background)
                 {
                     return Category.Background;
                 }
 
-                if (location.Contains(CategoryLocationHint.Drive, StringComparison.OrdinalIgnoreCase))
+                if (locationPriority > resolvedPriority)
                 {
-                    hasDrive = true;
-                }
-
-                if (location.Contains(CategoryLocationHint.Directory, StringComparison.OrdinalIgnoreCase)
-                    || location.Contains(CategoryLocationHint.Folder, StringComparison.OrdinalIgnoreCase))
-                {
-                    hasFolder = true;
-                }
-
-                if (location.Contains(CategoryLocationHint.AllFiles, StringComparison.OrdinalIgnoreCase)
-                    || location.Contains(CategoryLocationHint.Extension, StringComparison.OrdinalIgnoreCase)
-                    || location.Contains(CategoryLocationHint.AllFileSystemObjects, StringComparison.OrdinalIgnoreCase))
-                {
-                    hasFile = true;
+                    resolvedPriority = locationPriority;
                 }
             }
 
-            if (hasDrive)
+            return resolvedPriority switch
             {
-                return Category.Drive;
+                CategoryPriority.Drive => Category.Drive,
+                CategoryPriority.Folder => Category.Folder,
+                CategoryPriority.File => Category.File,
+                _ => Category.File
+            };
+        }
+
+        private static int ResolveLocationPriority(string location)
+        {
+            if (location.Contains(CategoryLocationHint.Background, StringComparison.OrdinalIgnoreCase))
+            {
+                return CategoryPriority.Background;
             }
 
-            if (hasFolder)
+            if (location.Contains(CategoryLocationHint.Drive, StringComparison.OrdinalIgnoreCase))
             {
-                return Category.Folder;
+                return CategoryPriority.Drive;
             }
 
-            if (hasFile)
+            if (ContainsAnyLocationHint(location, FolderLocationHints))
             {
-                return Category.File;
+                return CategoryPriority.Folder;
             }
 
-            return Category.File;
+            if (ContainsAnyLocationHint(location, FileLocationHints))
+            {
+                return CategoryPriority.File;
+            }
+
+            return CategoryPriority.Unknown;
+        }
+
+        private static bool ContainsAnyLocationHint(string location, IEnumerable<string> hints)
+        {
+            foreach (var hint in hints)
+            {
+                if (location.Contains(hint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

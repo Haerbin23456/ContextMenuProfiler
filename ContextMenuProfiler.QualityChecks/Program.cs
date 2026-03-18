@@ -175,6 +175,20 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("private static int ResolveLocationPriority", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("private static bool ContainsAnyLocationHint", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("resolvedPriority switch", StringComparison.Ordinal),
+    "BenchmarkSemanticsUsesPriorityBasedLocationResolution"
+);
+
+AssertTrue(
+    !benchmarkSemanticsSource.Contains("bool hasDrive = false;", StringComparison.Ordinal)
+    && !benchmarkSemanticsSource.Contains("bool hasFolder = false;", StringComparison.Ordinal)
+    && !benchmarkSemanticsSource.Contains("bool hasFile = false;", StringComparison.Ordinal),
+    "BenchmarkSemanticsNoLegacyLocationFlagResolution"
+);
+
+AssertTrue(
     benchmarkStatisticsSource.Contains("public static class BenchmarkStatisticsCalculator", StringComparison.Ordinal)
     && benchmarkStatisticsSource.Contains("public static BenchmarkStatistics Calculate", StringComparison.Ordinal),
     "BenchmarkStatisticsCalculatorExists"
