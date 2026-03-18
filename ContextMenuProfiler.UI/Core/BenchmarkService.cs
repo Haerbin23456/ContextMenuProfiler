@@ -321,7 +321,7 @@ namespace ContextMenuProfiler.UI.Core
             }
             else
             {
-                ApplyHookUnavailableFallback(result, hookCall.roundtrip_ms);
+                ApplyHookUnavailableFallback(result, hookCall.roundtrip_ms, hookCall.ipc_error);
             }
         }
 
@@ -394,9 +394,9 @@ namespace ContextMenuProfiler.UI.Core
 
         private static void ApplyHookErrorResult(BenchmarkResult result, HookResponse hookData)
         {
-            string hookError = hookData.error ?? LocalizationService.Instance["Dashboard.Value.Unknown"];
+            string hookError = BuildHookErrorDetails(hookData.error, hookData.code);
 
-            if (BenchmarkSemantics.IsTimeoutLikeError(hookData.error))
+            if (IsTimeoutLikeHookFailure(hookData))
             {
                 result.Status = BenchmarkSemantics.Status.IpcTimeout;
                 result.DetailedStatus = string.Format(
@@ -411,7 +411,7 @@ namespace ContextMenuProfiler.UI.Core
                 hookError);
         }
 
-        private static void ApplyHookUnavailableFallback(BenchmarkResult result, long roundTripMs)
+        private static void ApplyHookUnavailableFallback(BenchmarkResult result, long roundTripMs, string? ipcError)
         {
             if (result.Status == BenchmarkSemantics.Status.LoadError || result.Status == BenchmarkSemantics.Status.OrphanedMissingDll)
             {
@@ -421,12 +421,52 @@ namespace ContextMenuProfiler.UI.Core
             if (roundTripMs >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
             {
                 result.Status = BenchmarkSemantics.Status.IpcTimeout;
-                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"];
+                result.DetailedStatus = AttachIpcReason(
+                    LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"],
+                    ipcError);
                 return;
             }
 
             result.Status = BenchmarkSemantics.Status.RegistryFallback;
-            result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"];
+            result.DetailedStatus = AttachIpcReason(
+                LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"],
+                ipcError);
+        }
+
+        private static bool IsTimeoutLikeHookFailure(HookResponse hookData)
+        {
+            if (string.Equals(hookData.code, "E_TIMEOUT", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hookData.code, "E_REQ_HEADER", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hookData.code, "E_REQ_READ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return BenchmarkSemantics.IsTimeoutLikeError(hookData.error);
+        }
+
+        private static string BuildHookErrorDetails(string? error, string? code)
+        {
+            string resolvedError = string.IsNullOrWhiteSpace(error)
+                ? LocalizationService.Instance["Dashboard.Value.Unknown"]
+                : error;
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return resolvedError;
+            }
+
+            return $"{code}: {resolvedError}";
+        }
+
+        private static string AttachIpcReason(string detail, string? ipcError)
+        {
+            if (string.IsNullOrWhiteSpace(ipcError))
+            {
+                return detail;
+            }
+
+            return $"{detail} ({ipcError})";
         }
 
         private static bool IsKnownUnstableHandler(BenchmarkResult result)

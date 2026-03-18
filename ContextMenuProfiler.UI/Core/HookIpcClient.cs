@@ -13,6 +13,7 @@ namespace ContextMenuProfiler.UI.Core
     public class HookResponse
     {
         public bool success { get; set; }
+        public string? code { get; set; }
         public string? @interface { get; set; }
         public string? names { get; set; }
         public string? icons { get; set; }
