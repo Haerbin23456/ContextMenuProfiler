@@ -13,6 +13,8 @@ namespace ContextMenuProfiler.UI.Core.Services
     {
         private static readonly string LogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ContextMenuProfiler", "app.log");
         private static readonly object LockObj = new object();
+        private const long MaxLogFileBytes = 20L * 1024 * 1024;
+        private const long RetainAfterTrimBytes = 10L * 1024 * 1024;
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             WriteIndented = false
@@ -144,12 +146,63 @@ namespace ContextMenuProfiler.UI.Core.Services
 
                 lock (LockObj)
                 {
+                    TrimLogFileIfNeeded();
                     File.AppendAllText(LogFile, logEntry + Environment.NewLine);
                 }
 
                 System.Diagnostics.Debug.WriteLine(logEntry);
             }
             catch (Exception)
+            {
+            }
+        }
+
+        private static void TrimLogFileIfNeeded()
+        {
+            if (!File.Exists(LogFile))
+            {
+                return;
+            }
+
+            try
+            {
+                var fileInfo = new FileInfo(LogFile);
+                if (fileInfo.Length <= MaxLogFileBytes)
+                {
+                    return;
+                }
+
+                using var stream = new FileStream(LogFile, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+                if (stream.Length <= MaxLogFileBytes)
+                {
+                    return;
+                }
+
+                int bytesToKeep = (int)Math.Min(RetainAfterTrimBytes, stream.Length);
+                stream.Seek(-bytesToKeep, SeekOrigin.End);
+
+                var buffer = new byte[bytesToKeep];
+                int read = stream.Read(buffer, 0, buffer.Length);
+                if (read <= 0)
+                {
+                    stream.SetLength(0);
+                    return;
+                }
+
+                string tailText = Encoding.UTF8.GetString(buffer, 0, read);
+                int firstLineBreak = tailText.IndexOf('\n');
+                if (firstLineBreak >= 0 && firstLineBreak + 1 < tailText.Length)
+                {
+                    tailText = tailText[(firstLineBreak + 1)..];
+                }
+
+                stream.SetLength(0);
+                stream.Position = 0;
+                byte[] output = Encoding.UTF8.GetBytes(tailText);
+                stream.Write(output, 0, output.Length);
+                stream.Flush();
+            }
+            catch
             {
             }
         }
