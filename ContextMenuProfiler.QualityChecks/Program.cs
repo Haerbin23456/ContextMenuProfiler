@@ -196,6 +196,13 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("SkipUnstableHandlersEnvVar = \"CMP_SKIP_UNSTABLE_HANDLERS\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool IsSkipUnstableHandlersEnabled", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool ContainsKnownUnstableHandlerToken", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesUnstableHandlerHelpers"
+);
+
+AssertTrue(
     !benchmarkSemanticsSource.Contains("bool hasDrive = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFolder = false;", StringComparison.Ordinal)
     && !benchmarkSemanticsSource.Contains("bool hasFile = false;", StringComparison.Ordinal),
@@ -311,6 +318,21 @@ AssertTrue(
     benchmarkServiceSource.Contains("BenchmarkSemantics.IsTimeoutLikeError(hookData.error)", StringComparison.Ordinal)
     && !benchmarkServiceSource.Contains("hookData.error.Contains(\"Timeout\"", StringComparison.Ordinal),
     "BenchmarkServiceUsesTimeoutErrorSemanticHelper"
+);
+
+AssertTrue(
+    benchmarkServiceSource.Contains("BenchmarkSemantics.IsSkipUnstableHandlersEnabled()", StringComparison.Ordinal)
+    && benchmarkServiceSource.Contains("BenchmarkSemantics.ContainsKnownUnstableHandlerToken", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("CMP_SKIP_UNSTABLE_HANDLERS", StringComparison.Ordinal),
+    "BenchmarkServiceUsesUnstableHandlerSemanticHelpers"
+);
+
+AssertTrue(
+    !benchmarkServiceSource.Contains("PintoStartScreen", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("NvcplDesktopContext", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("NvAppDesktopContext", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("NVIDIA CPL Context Menu Extension", StringComparison.Ordinal),
+    "BenchmarkServiceNoInlineUnstableHandlerTokens"
 );
 
 AssertTrue(

@@ -127,6 +127,50 @@ namespace ContextMenuProfiler.UI.Core
             public const int ClipboardRetryAttempts = 5;
             public const int ClipboardRetryDelayMs = 100;
             public const uint ClipboardCantOpenHResult = 0x800401D0;
+            public const string SkipUnstableHandlersEnvVar = "CMP_SKIP_UNSTABLE_HANDLERS";
+            public const string EnabledFlagValue = "1";
+        }
+
+        public static class KnownUnstableHandlerToken
+        {
+            public const string PintoStartScreen = "PintoStartScreen";
+            public const string NvcplDesktopContext = "NvcplDesktopContext";
+            public const string NvAppDesktopContext = "NvAppDesktopContext";
+            public const string NvidiaCplContextMenuExtension = "NVIDIA CPL Context Menu Extension";
+        }
+
+        private static readonly string[] KnownUnstableHandlerTokens =
+        {
+            KnownUnstableHandlerToken.PintoStartScreen,
+            KnownUnstableHandlerToken.NvcplDesktopContext,
+            KnownUnstableHandlerToken.NvAppDesktopContext,
+            KnownUnstableHandlerToken.NvidiaCplContextMenuExtension
+        };
+
+        public static bool IsSkipUnstableHandlersEnabled()
+        {
+            return string.Equals(
+                Environment.GetEnvironmentVariable(Runtime.SkipUnstableHandlersEnvVar),
+                Runtime.EnabledFlagValue,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool ContainsKnownUnstableHandlerToken(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            foreach (var token in KnownUnstableHandlerTokens)
+            {
+                if (value.Contains(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public static bool IsPackagedExtensionType(string? type)

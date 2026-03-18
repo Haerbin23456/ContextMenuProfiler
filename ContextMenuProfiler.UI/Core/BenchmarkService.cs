@@ -57,15 +57,7 @@ namespace ContextMenuProfiler.UI.Core
     public class BenchmarkService
     {
         private static readonly bool SkipKnownUnstableHandlers =
-            string.Equals(Environment.GetEnvironmentVariable("CMP_SKIP_UNSTABLE_HANDLERS"), "1", StringComparison.OrdinalIgnoreCase);
-
-        private static readonly string[] KnownUnstableHandlerTokens =
-        {
-            "PintoStartScreen",
-            "NvcplDesktopContext",
-            "NvAppDesktopContext",
-            "NVIDIA CPL Context Menu Extension"
-        };
+            BenchmarkSemantics.IsSkipUnstableHandlersEnabled();
 
         public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode = ScanMode.Targeted)
         {
@@ -318,14 +310,12 @@ namespace ContextMenuProfiler.UI.Core
 
         private static bool IsKnownUnstableHandler(BenchmarkResult result)
         {
-            if (!string.IsNullOrWhiteSpace(result.Name) &&
-                KnownUnstableHandlerTokens.Any(token => result.Name.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(result.Name))
             {
                 return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(result.FriendlyName) &&
-                KnownUnstableHandlerTokens.Any(token => result.FriendlyName.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(result.FriendlyName))
             {
                 return true;
             }
@@ -334,10 +324,8 @@ namespace ContextMenuProfiler.UI.Core
             {
                 foreach (var entry in result.RegistryEntries)
                 {
-                    if ((!string.IsNullOrWhiteSpace(entry.Location) &&
-                         KnownUnstableHandlerTokens.Any(token => entry.Location.Contains(token, StringComparison.OrdinalIgnoreCase))) ||
-                        (!string.IsNullOrWhiteSpace(entry.Path) &&
-                         KnownUnstableHandlerTokens.Any(token => entry.Path.Contains(token, StringComparison.OrdinalIgnoreCase))))
+                    if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(entry.Location)
+                        || BenchmarkSemantics.ContainsKnownUnstableHandlerToken(entry.Path))
                     {
                         return true;
                     }
