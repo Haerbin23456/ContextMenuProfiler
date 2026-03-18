@@ -187,6 +187,16 @@ namespace ContextMenuProfiler.UI.Core
         {
             public const char HintSeparator = '|';
             public const string MsAppxUriPrefix = "ms-appx://";
+            public const string MrtPreferredTargetSizeToken = "targetsize-48";
+            public const string MrtPreferredScaleToken = "scale-200";
+            public const int IndirectStringBufferSize = 1024;
+        }
+
+        public static class IconFileExtension
+        {
+            public const string Png = ".png";
+            public const string Jpg = ".jpg";
+            public const string Bmp = ".bmp";
         }
 
         public static class LocationSummary

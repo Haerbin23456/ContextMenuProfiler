@@ -73,8 +73,10 @@ namespace ContextMenuProfiler.UI.Converters
                             string fileName = Path.GetFileNameWithoutExtension(fullPath);
                             string ext = Path.GetExtension(fullPath);
                             var files = Directory.GetFiles(dir, $"{fileName}*{ext}");
-                            var best = files.OrderByDescending(f => f.Contains("targetsize-48"))
-                                           .ThenByDescending(f => f.Contains("scale-200"))
+                            var best = files.OrderByDescending(f =>
+                                                f.Contains(BenchmarkSemantics.IconLocation.MrtPreferredTargetSizeToken, StringComparison.OrdinalIgnoreCase))
+                                           .ThenByDescending(f =>
+                                                f.Contains(BenchmarkSemantics.IconLocation.MrtPreferredScaleToken, StringComparison.OrdinalIgnoreCase))
                                            .FirstOrDefault();
                             if (best != null) return best;
                         }
@@ -130,7 +132,7 @@ namespace ContextMenuProfiler.UI.Converters
                 // Handle MUI / UWP Resource strings (starts with @)
                 if (path.StartsWith("@"))
                 {
-                    StringBuilder sb = new StringBuilder(1024);
+                    StringBuilder sb = new StringBuilder(BenchmarkSemantics.IconLocation.IndirectStringBufferSize);
                     int res = SHLoadIndirectString(path, sb, (uint)sb.Capacity, IntPtr.Zero);
                     if (res == 0) // S_OK
                     {
@@ -181,7 +183,9 @@ namespace ContextMenuProfiler.UI.Converters
                 {
                     string ext = Path.GetExtension(filePath).ToLower();
                     
-                    if (ext == ".png" || ext == ".jpg" || ext == ".bmp")
+                    if (ext == BenchmarkSemantics.IconFileExtension.Png
+                        || ext == BenchmarkSemantics.IconFileExtension.Jpg
+                        || ext == BenchmarkSemantics.IconFileExtension.Bmp)
                     {
                         var bitmap = new BitmapImage();
                         bitmap.BeginInit();

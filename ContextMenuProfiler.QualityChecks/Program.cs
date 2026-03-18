@@ -245,7 +245,14 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("ManifestAppLogo = \"ManifestAppLogo\"", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static class IconLocation", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("HintSeparator = '|'", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("MsAppxUriPrefix = \"ms-appx://\"", StringComparison.Ordinal),
+    && benchmarkSemanticsSource.Contains("MsAppxUriPrefix = \"ms-appx://\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("MrtPreferredTargetSizeToken = \"targetsize-48\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("MrtPreferredScaleToken = \"scale-200\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("IndirectStringBufferSize = 1024", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static class IconFileExtension", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("Png = \".png\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("Jpg = \".jpg\"", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("Bmp = \".bmp\"", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesIconSourceMarkers"
 );
 
@@ -351,10 +358,22 @@ AssertTrue(
 AssertTrue(
     iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.HintSeparator", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MsAppxUriPrefix", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MrtPreferredTargetSizeToken", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.MrtPreferredScaleToken", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconLocation.IndirectStringBufferSize", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconFileExtension.Png", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconFileExtension.Jpg", StringComparison.Ordinal)
+    && iconToImageConverterSource.Contains("BenchmarkSemantics.IconFileExtension.Bmp", StringComparison.Ordinal)
     && iconToImageConverterSource.Contains("HookIpcSemantics.Response.NoIconToken", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("uriStr.IndexOf('|')", StringComparison.Ordinal)
     && !iconToImageConverterSource.Contains("path == \"NONE\"", StringComparison.Ordinal)
-    && !iconToImageConverterSource.Contains("path.StartsWith(\"ms-appx://\")", StringComparison.Ordinal),
+    && !iconToImageConverterSource.Contains("path.StartsWith(\"ms-appx://\")", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("targetsize-48", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("scale-200", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("ext == \".png\"", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("ext == \".jpg\"", StringComparison.Ordinal)
+    && !iconToImageConverterSource.Contains("ext == \".bmp\"", StringComparison.Ordinal),
     "IconToImageConverterUsesIconProtocolSemantics"
 );
 
