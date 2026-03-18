@@ -46,6 +46,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         private readonly PropertyChangedEventHandler _hookServiceChangedHandler;
         private CancellationTokenSource? _filterCts;
         private bool _disposed;
+        private string? _currentScanId;
 
         [ObservableProperty]
         private ObservableCollection<BenchmarkResult> _displayResults = new();
@@ -405,7 +406,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 });
 
                 var mode = UseDeepScan ? ScanMode.Full : ScanMode.Targeted;
-                await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction)));
+                await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction), _currentScanId));
                 producerCompleted = true;
                 TryCompleteUiDrain();
                 await uiDrainTcs.Task;
@@ -504,6 +505,19 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], resultCount);
 
+            LogService.Instance.InfoEvent(
+                "scan.session_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_mode"] = _lastScanMode.ToString(),
+                    ["target_path"] = filePath,
+                    ["result_count"] = resultCount,
+                    ["display_result_count"] = DisplayResults.Count,
+                    ["total_load_ms"] = TotalLoadTime,
+                    ["active_extensions"] = ActiveExtensions
+                });
+
             string message = string.IsNullOrEmpty(filePath)
                 ? string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], resultCount)
                 : string.Format(
@@ -518,7 +532,16 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private void HandleScanFailure(string logMessage, Exception ex, bool setRealLoadError)
         {
-            LogService.Instance.Error(logMessage, ex);
+            LogService.Instance.ErrorEvent(
+                "scan.session_failed",
+                message: logMessage,
+                ex: ex,
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_mode"] = _lastScanMode.ToString(),
+                    ["target_path"] = _lastScanPath
+                });
             StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
             NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
 
@@ -532,9 +555,21 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             _lastScanMode = mode;
             _lastScanPath = scanPath;
+            _currentScanId = Guid.NewGuid().ToString("N");
             StatusText = scanningStatusText;
             IsBusy = true;
             RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
+
+            LogService.Instance.InfoEvent(
+                "scan.session_started",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_mode"] = mode.ToString(),
+                    ["scan_path"] = scanPath,
+                    ["deep_scan"] = UseDeepScan,
+                    ["hook_status"] = HookService.Instance.CurrentStatus
+                });
 
             App.Current.Dispatcher.Invoke(() =>
             {
@@ -553,7 +588,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 {
                     try
                     {
-                        threadResult = _benchmarkService.RunBenchmark(filePath);
+                        threadResult = _benchmarkService.RunBenchmark(filePath, _currentScanId);
                     }
                     catch (Exception ex)
                     {

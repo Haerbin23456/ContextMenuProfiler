@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
 using System.Text.Json;
+using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Core
 {
@@ -42,10 +43,11 @@ namespace ContextMenuProfiler.UI.Core
             HookIpcSemantics.Runtime.MaxConcurrentCalls,
             HookIpcSemantics.Runtime.MaxConcurrentCalls);
 
-        public static async Task<HookCallResult> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null)
+        public static async Task<HookCallResult> GetHookDataAsync(string clsid, string? contextPath = null, string? dllHint = null, string? scanId = null)
         {
             var result = new HookCallResult();
             var swTotal = Stopwatch.StartNew();
+            int attempts = 0;
             try
             {
                 // Default bait path if none provided
@@ -57,9 +59,10 @@ namespace ContextMenuProfiler.UI.Core
 
                 for (int attempt = 0; attempt < HookIpcSemantics.Runtime.MaxAttempts; attempt++)
                 {
+                    attempts = attempt + 1;
                     try
                     {
-                        if (await TryProbeWithLockAsync(clsid, path, dllHint, result))
+                        if (await TryProbeWithLockAsync(clsid, path, dllHint, result, scanId, attempt + 1))
                         {
                             return result;
                         }
@@ -67,7 +70,16 @@ namespace ContextMenuProfiler.UI.Core
                     catch (Exception ex)
                     {
                         result.ipc_error = "critical_error";
-                        Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
+                        LogService.Instance.ErrorEvent(
+                            "ipc.probe_critical_error",
+                            ex: ex,
+                            fields: new Dictionary<string, object?>
+                            {
+                                ["scan_id"] = scanId,
+                                ["clsid"] = clsid,
+                                ["attempt"] = attempt + 1,
+                                ["ipc_error"] = result.ipc_error
+                            });
                     }
 
                     if (await DelayForRetryAsync(attempt))
@@ -83,10 +95,25 @@ namespace ContextMenuProfiler.UI.Core
             {
                 swTotal.Stop();
                 result.total_ms = Math.Max(0, (long)swTotal.Elapsed.TotalMilliseconds);
+
+                LogService.Instance.InfoEvent(
+                    "ipc.probe_completed",
+                    fields: new Dictionary<string, object?>
+                    {
+                        ["scan_id"] = scanId,
+                        ["clsid"] = clsid,
+                        ["attempts"] = attempts,
+                        ["success"] = result.data?.success == true,
+                        ["ipc_error"] = result.ipc_error,
+                        ["lock_wait_ms"] = result.lock_wait_ms,
+                        ["connect_ms"] = result.connect_ms,
+                        ["roundtrip_ms"] = result.roundtrip_ms,
+                        ["total_ms"] = result.total_ms
+                    });
             }
         }
 
-        private static async Task<bool> TryProbeWithLockAsync(string clsid, string path, string? dllHint, HookCallResult result)
+        private static async Task<bool> TryProbeWithLockAsync(string clsid, string path, string? dllHint, HookCallResult result, string? scanId, int attempt)
         {
             bool hasLock = false;
             var swLock = Stopwatch.StartNew();
@@ -96,7 +123,7 @@ namespace ContextMenuProfiler.UI.Core
                 hasLock = true;
                 swLock.Stop();
                 result.lock_wait_ms += Math.Max(0, (long)swLock.Elapsed.TotalMilliseconds);
-                return await TryProbeOnceAsync(clsid, path, dllHint, result);
+                return await TryProbeOnceAsync(clsid, path, dllHint, result, scanId, attempt);
             }
             finally
             {
@@ -112,7 +139,7 @@ namespace ContextMenuProfiler.UI.Core
             }
         }
 
-        private static async Task<bool> TryProbeOnceAsync(string clsid, string path, string? dllHint, HookCallResult result)
+        private static async Task<bool> TryProbeOnceAsync(string clsid, string path, string? dllHint, HookCallResult result, string? scanId, int attempt)
         {
             using var client = new NamedPipeClientStream(".", HookIpcSemantics.Runtime.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 
@@ -126,7 +153,17 @@ namespace ContextMenuProfiler.UI.Core
                 swConnect.Stop();
                 result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
                 result.ipc_error = "connect_failed";
-                Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
+                LogService.Instance.WarningEvent(
+                    "ipc.probe_connect_failed",
+                    ex: ex,
+                    fields: new Dictionary<string, object?>
+                    {
+                        ["scan_id"] = scanId,
+                        ["clsid"] = clsid,
+                        ["attempt"] = attempt,
+                        ["connect_ms"] = result.connect_ms,
+                        ["ipc_error"] = result.ipc_error
+                    });
                 return false;
             }
 
@@ -135,10 +172,10 @@ namespace ContextMenuProfiler.UI.Core
 
             string requestStr = BuildRequest(clsid, path, dllHint);
             byte[] requestPayload = Encoding.UTF8.GetBytes(requestStr);
-            return await TryProbeFramedAsync(client, requestPayload, result);
+            return await TryProbeFramedAsync(client, requestPayload, result, scanId, clsid, attempt);
         }
 
-        private static async Task<bool> TryProbeFramedAsync(NamedPipeClientStream client, byte[] requestPayload, HookCallResult result)
+        private static async Task<bool> TryProbeFramedAsync(NamedPipeClientStream client, byte[] requestPayload, HookCallResult result, string? scanId, string clsid, int attempt)
         {
             var swRoundTrip = Stopwatch.StartNew();
             using var roundTripCts = new CancellationTokenSource(HookIpcSemantics.Runtime.RoundTripTimeoutMs);
@@ -153,6 +190,17 @@ namespace ContextMenuProfiler.UI.Core
             {
                 result.ipc_error = "framed_exchange_failed";
                 CompleteRoundTrip(swRoundTrip, result);
+
+                LogService.Instance.WarningEvent(
+                    "ipc.probe_framed_exchange_failed",
+                    fields: new Dictionary<string, object?>
+                    {
+                        ["scan_id"] = scanId,
+                        ["clsid"] = clsid,
+                        ["attempt"] = attempt,
+                        ["roundtrip_ms"] = result.roundtrip_ms,
+                        ["ipc_error"] = result.ipc_error
+                    });
                 return false;
             }
 
@@ -161,6 +209,17 @@ namespace ContextMenuProfiler.UI.Core
             {
                 result.ipc_error = "invalid_json_response";
                 CompleteRoundTrip(swRoundTrip, result);
+
+                LogService.Instance.WarningEvent(
+                    "ipc.probe_invalid_json_response",
+                    fields: new Dictionary<string, object?>
+                    {
+                        ["scan_id"] = scanId,
+                        ["clsid"] = clsid,
+                        ["attempt"] = attempt,
+                        ["roundtrip_ms"] = result.roundtrip_ms,
+                        ["ipc_error"] = result.ipc_error
+                    });
                 return false;
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -64,12 +65,48 @@ namespace ContextMenuProfiler.UI.Core
             return Task.Run(() => RunSystemBenchmarkAsync(mode)).GetAwaiter().GetResult();
         }
 
+        public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode, string? scanId)
+        {
+            return Task.Run(() => RunSystemBenchmarkAsync(mode, null, scanId)).GetAwaiter().GetResult();
+        }
+
         public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode = ScanMode.Targeted, IProgress<BenchmarkResult>? progress = null)
         {
+            return await RunSystemBenchmarkAsync(mode, progress, null);
+        }
+
+        public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode, IProgress<BenchmarkResult>? progress, string? scanId)
+        {
             using var fileContext = ShellTestContext.Create(false);
+            var scanSw = Stopwatch.StartNew();
+
             var registryHandlers = RegistryScanner.ScanHandlers(mode);
             var staticVerbs = RegistryScanner.ScanStaticVerbs();
-            return await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, null, fileContext.Path, progress);
+
+            LogService.Instance.InfoEvent(
+                "scan.registry_scan_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["scan_mode"] = mode.ToString(),
+                    ["scope"] = "system",
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count
+                });
+
+            var results = await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, null, fileContext.Path, progress, scanId);
+            scanSw.Stop();
+
+            LogService.Instance.InfoEvent(
+                "scan.service_completed",
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, mode.ToString(), "system"));
+
+            return results;
+        }
+
+        public List<BenchmarkResult> RunBenchmark(string targetPath, string? scanId)
+        {
+            return Task.Run(() => RunBenchmarkAsync(targetPath, null, scanId)).GetAwaiter().GetResult();
         }
 
         public List<BenchmarkResult> RunBenchmark(string targetPath)
@@ -79,15 +116,42 @@ namespace ContextMenuProfiler.UI.Core
 
         public async Task<List<BenchmarkResult>> RunBenchmarkAsync(string targetPath, IProgress<BenchmarkResult>? progress = null)
         {
+            return await RunBenchmarkAsync(targetPath, progress, null);
+        }
+
+        public async Task<List<BenchmarkResult>> RunBenchmarkAsync(string targetPath, IProgress<BenchmarkResult>? progress, string? scanId)
+        {
             if (string.IsNullOrWhiteSpace(targetPath))
             {
                 LogService.Instance.Warning("RunBenchmarkAsync received an empty target path; returning no results.");
                 return new List<BenchmarkResult>();
             }
 
+            var scanSw = Stopwatch.StartNew();
+
             var registryHandlers = RegistryScanner.ScanHandlersForPath(targetPath);
             var staticVerbs = RegistryScanner.ScanStaticVerbsForPath(targetPath);
-            return await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, targetPath, targetPath, progress);
+
+            LogService.Instance.InfoEvent(
+                "scan.registry_scan_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["scan_mode"] = "file",
+                    ["scope"] = "file",
+                    ["target_path"] = targetPath,
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count
+                });
+
+            var results = await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, targetPath, targetPath, progress, scanId);
+            scanSw.Stop();
+
+            LogService.Instance.InfoEvent(
+                "scan.service_completed",
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "file", "file", targetPath));
+
+            return results;
         }
 
         private async Task<List<BenchmarkResult>> RunBenchmarkCoreAsync(
@@ -95,15 +159,72 @@ namespace ContextMenuProfiler.UI.Core
             Dictionary<string, List<string>> staticVerbs,
             string? packageTargetPath,
             string hookContextPath,
-            IProgress<BenchmarkResult>? progress)
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
         {
+            var coreSw = Stopwatch.StartNew();
             var allResults = new ConcurrentBag<BenchmarkResult>();
             var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
             var semaphore = new SemaphoreSlim(BenchmarkSemantics.Runtime.MaxParallelProbeTasks);
 
-            await ProcessComHandlersAsync(registryHandlers, hookContextPath, allResults, resultsMap, semaphore, progress);
-            ProcessStaticVerbEntries(staticVerbs, allResults, progress);
-            await ProcessPackagedExtensionsAsync(packageTargetPath, hookContextPath, allResults, resultsMap, semaphore, progress);
+            LogService.Instance.InfoEvent(
+                "scan.benchmark_core_started",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count,
+                    ["has_package_target"] = !string.IsNullOrWhiteSpace(packageTargetPath)
+                });
+
+            var phaseSw = Stopwatch.StartNew();
+            await ProcessComHandlersAsync(registryHandlers, hookContextPath, allResults, resultsMap, semaphore, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "com_handlers",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            phaseSw.Restart();
+            ProcessStaticVerbEntries(staticVerbs, allResults, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "static_verbs",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            phaseSw.Restart();
+            await ProcessPackagedExtensionsAsync(packageTargetPath, hookContextPath, allResults, resultsMap, semaphore, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "packaged_extensions",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            coreSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.benchmark_core_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["duration_ms"] = coreSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
 
             return allResults.ToList();
         }
@@ -114,7 +235,8 @@ namespace ContextMenuProfiler.UI.Core
             ConcurrentBag<BenchmarkResult> allResults,
             ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
             SemaphoreSlim semaphore,
-            IProgress<BenchmarkResult>? progress)
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
         {
             var comTasks = registryHandlers.Select(clsidEntry =>
                 RunWithSemaphoreAsync(semaphore, async () =>
@@ -146,7 +268,7 @@ namespace ContextMenuProfiler.UI.Core
                     }
 
                     result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
-                    await ProcessMeasuredResultAsync(result, hookContextPath, allResults, progress);
+                    await ProcessMeasuredResultAsync(result, hookContextPath, allResults, progress, scanId);
                 }));
 
             await Task.WhenAll(comTasks);
@@ -155,7 +277,8 @@ namespace ContextMenuProfiler.UI.Core
         private void ProcessStaticVerbEntries(
             Dictionary<string, List<string>> staticVerbs,
             ConcurrentBag<BenchmarkResult> allResults,
-            IProgress<BenchmarkResult>? progress)
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
         {
             foreach (var verbEntry in staticVerbs)
             {
@@ -166,6 +289,9 @@ namespace ContextMenuProfiler.UI.Core
                 }
 
                 AddAndReportResult(allResults, verbResult, progress);
+                LogService.Instance.InfoEvent(
+                    "scan.item_processed",
+                    fields: BuildItemFields(verbResult, scanId, "static"));
             }
         }
 
@@ -175,7 +301,8 @@ namespace ContextMenuProfiler.UI.Core
             ConcurrentBag<BenchmarkResult> allResults,
             ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
             SemaphoreSlim semaphore,
-            IProgress<BenchmarkResult>? progress)
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
         {
             var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
                 .Where(r => r.Clsid.HasValue)
@@ -188,7 +315,7 @@ namespace ContextMenuProfiler.UI.Core
                         }
 
                         uwpResult.Category = BenchmarkSemantics.Category.Uwp;
-                        await ProcessMeasuredResultAsync(uwpResult, hookContextPath, allResults, progress);
+                        await ProcessMeasuredResultAsync(uwpResult, hookContextPath, allResults, progress, scanId);
                     }));
 
             await Task.WhenAll(uwpTasks);
@@ -220,12 +347,17 @@ namespace ContextMenuProfiler.UI.Core
             BenchmarkResult result,
             string hookContextPath,
             ConcurrentBag<BenchmarkResult> allResults,
-            IProgress<BenchmarkResult>? progress)
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
         {
-            await EnrichBenchmarkResultAsync(result, hookContextPath);
+            await EnrichBenchmarkResultAsync(result, hookContextPath, scanId);
             result.IsEnabled = ResolveEnabledState(result);
             result.LocationSummary = ResolveLocationSummary(result);
             AddAndReportResult(allResults, result, progress);
+
+            LogService.Instance.InfoEvent(
+                "scan.item_processed",
+                fields: BuildItemFields(result, scanId, "measured"));
         }
 
         private static bool ResolveEnabledState(BenchmarkResult result)
@@ -285,7 +417,7 @@ namespace ContextMenuProfiler.UI.Core
             return result;
         }
 
-        private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath)
+        private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath, string? scanId)
         {
             if (!result.Clsid.HasValue) return;
 
@@ -304,7 +436,7 @@ namespace ContextMenuProfiler.UI.Core
                     result.BinaryPath);
             }
 
-            var hookCall = await HookIpcClient.GetHookDataAsync(result.Clsid.Value.ToString("B"), contextPath, result.BinaryPath);
+            var hookCall = await HookIpcClient.GetHookDataAsync(result.Clsid.Value.ToString("B"), contextPath, result.BinaryPath, scanId);
             var hookData = hookCall.data;
             result.WallClockTime = hookCall.total_ms;
             result.LockWaitTime = hookCall.lock_wait_ms;
@@ -718,6 +850,54 @@ namespace ContextMenuProfiler.UI.Core
         private string DetermineCategory(IEnumerable<string> locations)
         {
             return BenchmarkSemantics.ResolveCategoryFromLocations(locations);
+        }
+
+        private static Dictionary<string, object?> BuildSummaryFields(
+            List<BenchmarkResult> results,
+            long durationMs,
+            string? scanId,
+            string scanMode,
+            string scope,
+            string? targetPath = null)
+        {
+            int measuredCount = results.Count(r => r.TotalTime > 0);
+            int fallbackCount = results.Count(r => BenchmarkSemantics.IsFallbackLikeStatus(r.Status));
+
+            return new Dictionary<string, object?>
+            {
+                ["scan_id"] = scanId,
+                ["scan_mode"] = scanMode,
+                ["scope"] = scope,
+                ["target_path"] = targetPath,
+                ["duration_ms"] = durationMs,
+                ["result_count"] = results.Count,
+                ["measured_count"] = measuredCount,
+                ["fallback_count"] = fallbackCount
+            };
+        }
+
+        private static Dictionary<string, object?> BuildItemFields(BenchmarkResult result, string? scanId, string source)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["scan_id"] = scanId,
+                ["source"] = source,
+                ["clsid"] = result.Clsid?.ToString("B"),
+                ["name"] = result.Name,
+                ["type"] = result.Type,
+                ["status"] = result.Status,
+                ["total_ms"] = result.TotalTime,
+                ["create_ms"] = result.CreateTime,
+                ["init_ms"] = result.InitTime,
+                ["query_ms"] = result.QueryTime,
+                ["wall_clock_ms"] = result.WallClockTime,
+                ["lock_wait_ms"] = result.LockWaitTime,
+                ["connect_ms"] = result.ConnectTime,
+                ["roundtrip_ms"] = result.IpcRoundTripTime,
+                ["is_enabled"] = result.IsEnabled,
+                ["category"] = result.Category,
+                ["registry_entry_count"] = result.RegistryEntries?.Count ?? 0
+            };
         }
     }
 }
