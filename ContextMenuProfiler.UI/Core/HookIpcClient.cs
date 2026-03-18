@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
-using System.Linq;
 using System.Text.Json;
 
 namespace ContextMenuProfiler.UI.Core
@@ -106,9 +105,7 @@ namespace ContextMenuProfiler.UI.Core
                             }
                             catch (OperationCanceledException)
                             {
-                                swRoundTrip.Stop();
-                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (await DelayForRetryAsync(attempt))
+                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
                                 {
                                     continue;
                                 }
@@ -117,9 +114,7 @@ namespace ContextMenuProfiler.UI.Core
 
                             if (string.IsNullOrWhiteSpace(response))
                             {
-                                swRoundTrip.Stop();
-                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (await DelayForRetryAsync(attempt))
+                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
                                 {
                                     continue;
                                 }
@@ -131,13 +126,10 @@ namespace ContextMenuProfiler.UI.Core
                                 if (!string.IsNullOrEmpty(json))
                                 {
                                     result.data = JsonSerializer.Deserialize<HookResponse>(json);
-                                    swRoundTrip.Stop();
-                                    result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+                                    CompleteRoundTrip(swRoundTrip, result);
                                     return result;
                                 }
-                                swRoundTrip.Stop();
-                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (await DelayForRetryAsync(attempt))
+                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
                                 {
                                     continue;
                                 }
@@ -145,9 +137,7 @@ namespace ContextMenuProfiler.UI.Core
                             }
                             catch (JsonException)
                             {
-                                swRoundTrip.Stop();
-                                result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (await DelayForRetryAsync(attempt))
+                                if (await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt))
                                 {
                                     continue;
                                 }
@@ -204,6 +194,18 @@ namespace ContextMenuProfiler.UI.Core
 
             await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
             return true;
+        }
+
+        private static void CompleteRoundTrip(Stopwatch swRoundTrip, HookCallResult result)
+        {
+            swRoundTrip.Stop();
+            result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
+        }
+
+        private static async Task<bool> CompleteRoundTripAndRetryAsync(Stopwatch swRoundTrip, HookCallResult result, int attempt)
+        {
+            CompleteRoundTrip(swRoundTrip, result);
+            return await DelayForRetryAsync(attempt);
         }
 
         internal static string BuildRequest(string clsid, string path, string? dllHint)

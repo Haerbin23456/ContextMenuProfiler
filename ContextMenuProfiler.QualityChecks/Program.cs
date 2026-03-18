@@ -233,7 +233,10 @@ AssertTrue(
     && hookIpcClientSource.Contains("HookIpcSemantics.Response.MultiValueDelimiter", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("private static async Task<bool> DelayForRetryAsync", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal),
+    && hookIpcClientSource.Contains("await DelayForRetryAsync(attempt)", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("private static void CompleteRoundTrip", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("private static async Task<bool> CompleteRoundTripAndRetryAsync", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("await CompleteRoundTripAndRetryAsync(swRoundTrip, result, attempt)", StringComparison.Ordinal),
     "HookIpcClientUsesIpcSemanticsConstants"
 );
 
@@ -249,7 +252,8 @@ AssertTrue(
     && !hookIpcClientSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("if (ShouldRetry(attempt))", StringComparison.Ordinal)
-    && !hookIpcClientSource.Contains("data.names.Split('|',", StringComparison.Ordinal),
+    && !hookIpcClientSource.Contains("data.names.Split('|',", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);\r\n                                if (await DelayForRetryAsync(attempt))", StringComparison.Ordinal),
     "HookIpcClientNoLegacyInlineProtocolRuntimeLiterals"
 );
 
