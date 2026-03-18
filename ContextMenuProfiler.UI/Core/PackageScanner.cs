@@ -226,7 +226,7 @@ namespace ContextMenuProfiler.UI.Core
         {
             try
             {
-                using var key = Registry.ClassesRoot.OpenSubKey(PackageManifestSemantics.RegistryPath.BuildPackagedComClassIndexPath(clsid));
+                using var key = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsid.ToString("B")));
                 return key?.GetValue("") as string;
             }
             catch { return null; }

@@ -1,4 +1,3 @@
-using System;
 using System.Xml.Linq;
 
 namespace ContextMenuProfiler.UI.Core
@@ -45,14 +44,5 @@ namespace ContextMenuProfiler.UI.Core
             public const string Square150LogoAttribute = "Square150x150Logo";
         }
 
-        public static class RegistryPath
-        {
-            public const string PackagedComClassIndexPrefix = @"PackagedCom\ClassIndex";
-
-            public static string BuildPackagedComClassIndexPath(Guid clsid)
-            {
-                return $@"{PackagedComClassIndexPrefix}\{clsid:B}";
-            }
-        }
     }
 }

@@ -260,8 +260,7 @@ AssertTrue(
     packageManifestSemanticsSource.Contains("public static class PackageManifestSemantics", StringComparison.Ordinal)
     && packageManifestSemanticsSource.Contains("FileName = \"AppxManifest.xml\"", StringComparison.Ordinal)
     && packageManifestSemanticsSource.Contains("ContextMenuCategoryToken = \"fileExplorerContextMenus\"", StringComparison.Ordinal)
-    && packageManifestSemanticsSource.Contains("ContextMenuCategory = \"windows.fileExplorerContextMenus\"", StringComparison.Ordinal)
-    && packageManifestSemanticsSource.Contains("BuildPackagedComClassIndexPath", StringComparison.Ordinal),
+    && packageManifestSemanticsSource.Contains("ContextMenuCategory = \"windows.fileExplorerContextMenus\"", StringComparison.Ordinal),
     "PackageManifestSemanticsDefinesManifestTokens"
 );
 
@@ -322,7 +321,7 @@ AssertTrue(
     && packageScannerSource.Contains("PackageManifestSemantics.Manifest.ContextMenuCategory", StringComparison.Ordinal)
     && packageScannerSource.Contains("PackageManifestSemantics.Manifest.ExtensionElement", StringComparison.Ordinal)
     && packageScannerSource.Contains("PackageManifestSemantics.Manifest.CategoryAttribute", StringComparison.Ordinal)
-    && packageScannerSource.Contains("PackageManifestSemantics.RegistryPath.BuildPackagedComClassIndexPath", StringComparison.Ordinal),
+    && packageScannerSource.Contains("ComRegistrySemantics.BuildPackagedComClassIndexPath", StringComparison.Ordinal),
     "PackageScannerUsesPackageManifestSemantics"
 );
 
