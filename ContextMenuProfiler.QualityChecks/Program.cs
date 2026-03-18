@@ -412,6 +412,18 @@ AssertTrue(
 );
 
 AssertTrue(
+    dashboardViewModelSource.Contains("if (token.IsCancellationRequested || _disposed) return;", StringComparison.Ordinal),
+    "DashboardViewModelGuardsFilterUpdatesAfterDispose"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("private void OnLocalizationChanged", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("private void OnHookServicePropertyChanged", StringComparison.Ordinal)
+    && dashboardViewModelSource.Contains("if (_disposed)", StringComparison.Ordinal),
+    "DashboardViewModelGuardsEventHandlersAfterDispose"
+);
+
+AssertTrue(
     dashboardViewModelSource.Contains("LocalizationService.Instance.PropertyChanged += _localizationChangedHandler", StringComparison.Ordinal)
     && dashboardViewModelSource.Contains("LocalizationService.Instance.PropertyChanged -= _localizationChangedHandler", StringComparison.Ordinal),
     "DashboardViewModelLocalizationSubscriptionBalanced"

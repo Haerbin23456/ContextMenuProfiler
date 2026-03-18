@@ -87,6 +87,11 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private async Task ApplyFilterAsync()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             // Cancel previous filter task
             _filterCts?.Cancel();
             _filterCts?.Dispose();
@@ -112,7 +117,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                     return query.ToList().OrderBy(r => r, new ComparisonComparer<BenchmarkResult>(comparer)).ToList();
                 }, token);
 
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested || _disposed) return;
 
                 // 2. Clear current display
                 DisplayResults.Clear();
@@ -250,6 +255,11 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (e.PropertyName == "Item[]")
             {
                 ApplyLocalizedCategoryNames();
@@ -264,6 +274,11 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private void OnHookServicePropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             if (e.PropertyName == nameof(HookService.CurrentStatus))
             {
                 App.Current.Dispatcher.Invoke(() =>
