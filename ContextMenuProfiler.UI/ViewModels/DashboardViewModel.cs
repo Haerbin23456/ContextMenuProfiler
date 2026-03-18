@@ -694,10 +694,11 @@ namespace ContextMenuProfiler.UI.ViewModels
             
             try
             {
-                // Registry path might need translation from HKCR to HKLM/HKCU
-                string fullPath = path;
-                if (path.StartsWith("*\\")) fullPath = "HKEY_CLASSES_ROOT\\" + path;
-                else if (!path.Contains("HKEY_")) fullPath = "HKEY_CLASSES_ROOT\\" + path;
+                string fullPath = RegistryPathHelper.NormalizeForRegedit(path);
+                if (string.IsNullOrEmpty(fullPath))
+                {
+                    return;
+                }
 
                 using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Applets\Regedit"))
                 {

@@ -155,6 +155,9 @@ string packageScannerSource = File.ReadAllText(packageScannerPath);
 string dashboardViewModelPath = FindFileUpward(@"ContextMenuProfiler.UI\ViewModels\DashboardViewModel.cs");
 string dashboardViewModelSource = File.ReadAllText(dashboardViewModelPath);
 
+string registryPathHelperPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\Helpers\RegistryPathHelper.cs");
+string registryPathHelperSource = File.ReadAllText(registryPathHelperPath);
+
 string statusVisibilityConverterPath = FindFileUpward(@"ContextMenuProfiler.UI\Converters\StatusToVisibilityConverter.cs");
 string statusVisibilityConverterSource = File.ReadAllText(statusVisibilityConverterPath);
 
@@ -366,6 +369,24 @@ AssertTrue(
     dashboardViewModelSource.Contains("private async Task<List<BenchmarkResult>> RunFileBenchmarkInStaAsync", StringComparison.Ordinal)
     && dashboardViewModelSource.Contains("RunFileBenchmarkInStaAsync(filePath)", StringComparison.Ordinal),
     "DashboardViewModelUsesStaFileBenchmarkHelper"
+);
+
+AssertTrue(
+    registryPathHelperSource.Contains("public static class RegistryPathHelper", StringComparison.Ordinal)
+    && registryPathHelperSource.Contains("NormalizeForRegedit", StringComparison.Ordinal)
+    && registryPathHelperSource.Contains("ClassesRootPrefix", StringComparison.Ordinal),
+    "RegistryPathHelperExists"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("RegistryPathHelper.NormalizeForRegedit(path)", StringComparison.Ordinal),
+    "DashboardViewModelUsesRegistryPathHelper"
+);
+
+AssertTrue(
+    !dashboardViewModelSource.Contains("path.StartsWith(\"*\\\\\")", StringComparison.Ordinal)
+    && !dashboardViewModelSource.Contains("HKEY_CLASSES_ROOT\\\\", StringComparison.Ordinal),
+    "DashboardViewModelNoInlineRegistryPathNormalization"
 );
 
 AssertTrue(
