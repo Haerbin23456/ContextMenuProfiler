@@ -100,10 +100,8 @@ namespace ContextMenuProfiler.UI.Core
             var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
             var semaphore = new SemaphoreSlim(BenchmarkSemantics.Runtime.MaxParallelProbeTasks);
 
-            var comTasks = registryHandlers.Select(async clsidEntry =>
-            {
-                await semaphore.WaitAsync();
-                try
+            var comTasks = registryHandlers.Select(clsidEntry =>
+                RunWithSemaphoreAsync(semaphore, async () =>
                 {
                     var clsid = clsidEntry.Key;
                     var handlerInfos = clsidEntry.Value;
@@ -138,57 +136,26 @@ namespace ContextMenuProfiler.UI.Core
                     result.IsEnabled = !isBlocked && !hasDisabledPath;
                     result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
 
-                    allResults.Add(result);
-                    progress?.Report(result);
-                }
-                finally { semaphore.Release(); }
-            });
+                    AddAndReportResult(allResults, result, progress);
+                }));
 
             await Task.WhenAll(comTasks);
 
             foreach (var verbEntry in staticVerbs)
             {
-                string key = verbEntry.Key;
-                var paths = verbEntry.Value;
-
-                if (!BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command))
+                var verbResult = CreateStaticVerbResult(verbEntry.Key, verbEntry.Value);
+                if (verbResult == null)
                 {
-                    LogService.Instance.Warning($"Skip malformed static verb entry key: '{key}'");
                     continue;
                 }
 
-                var verbResult = new BenchmarkResult
-                {
-                    Name = name,
-                    Type = BenchmarkSemantics.Type.Static,
-                    Status = BenchmarkSemantics.Status.StaticNotMeasured,
-                    BinaryPath = ExtractExecutablePath(command),
-                    RegistryEntries = paths.Select(p => new RegistryHandlerInfo
-                    {
-                        Path = p,
-                        Location = BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)
-                    }).ToList(),
-                    InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
-                    DetailedStatus = LocalizationService.Instance["Dashboard.Detail.StaticNotMeasured"],
-                    TotalTime = 0,
-                    Category = BenchmarkSemantics.Category.Static
-                };
-
-                bool anyDisabled = paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled);
-                verbResult.IsEnabled = !anyDisabled;
-                verbResult.LocationSummary = string.Join(", ", verbResult.RegistryEntries.Select(e => e.Location).Distinct());
-                verbResult.IconLocation = ResolveStaticVerbIcon(paths.First(), verbResult.BinaryPath);
-
-                allResults.Add(verbResult);
-                progress?.Report(verbResult);
+                AddAndReportResult(allResults, verbResult, progress);
             }
 
             var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
                 .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
-                .Select(async uwpResult =>
-                {
-                    await semaphore.WaitAsync();
-                    try
+                .Select(uwpResult =>
+                    RunWithSemaphoreAsync(semaphore, async () =>
                     {
                         uwpResult.Category = BenchmarkSemantics.Category.Uwp;
                         await EnrichBenchmarkResultAsync(uwpResult, hookContextPath);
@@ -196,15 +163,65 @@ namespace ContextMenuProfiler.UI.Core
                         uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
                         uwpResult.LocationSummary = BenchmarkSemantics.LocationSummary.ModernShellUwp;
 
-                        allResults.Add(uwpResult);
-                        progress?.Report(uwpResult);
-                    }
-                    finally { semaphore.Release(); }
-                });
+                        AddAndReportResult(allResults, uwpResult, progress);
+                    }));
 
             await Task.WhenAll(uwpTasks);
 
             return allResults.ToList();
+        }
+
+        private static async Task RunWithSemaphoreAsync(SemaphoreSlim semaphore, Func<Task> action)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                await action();
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+
+        private static void AddAndReportResult(
+            ConcurrentBag<BenchmarkResult> allResults,
+            BenchmarkResult result,
+            IProgress<BenchmarkResult>? progress)
+        {
+            allResults.Add(result);
+            progress?.Report(result);
+        }
+
+        private BenchmarkResult? CreateStaticVerbResult(string key, List<string> paths)
+        {
+            if (!BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command))
+            {
+                LogService.Instance.Warning($"Skip malformed static verb entry key: '{key}'");
+                return null;
+            }
+
+            var result = new BenchmarkResult
+            {
+                Name = name,
+                Type = BenchmarkSemantics.Type.Static,
+                Status = BenchmarkSemantics.Status.StaticNotMeasured,
+                BinaryPath = ExtractExecutablePath(command),
+                RegistryEntries = paths.Select(p => new RegistryHandlerInfo
+                {
+                    Path = p,
+                    Location = BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)
+                }).ToList(),
+                InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
+                DetailedStatus = LocalizationService.Instance["Dashboard.Detail.StaticNotMeasured"],
+                TotalTime = 0,
+                Category = BenchmarkSemantics.Category.Static
+            };
+
+            result.IsEnabled = !paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled);
+            result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
+            result.IconLocation = ResolveStaticVerbIcon(paths.First(), result.BinaryPath);
+            return result;
         }
 
         private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath)
