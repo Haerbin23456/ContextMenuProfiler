@@ -307,7 +307,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                         LocalizationService.Instance["Dashboard.Notify.InjectFailed.Message"]);
                     return;
                 }
-                await Task.Delay(1000); // Give it a second
+                await Task.Delay(BenchmarkSemantics.Runtime.HookReconnectStabilizationDelayMs);
                 await HookService.Instance.GetStatusAsync();
                 if (CurrentHookStatus == HookStatus.Active)
                 {
@@ -696,7 +696,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             if (item?.Clsid != null)
             {
                 string clsid = item.Clsid.Value.ToString("B");
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < BenchmarkSemantics.Runtime.ClipboardRetryAttempts; i++)
                 {
                     try
                     {
@@ -709,7 +709,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                     catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.ErrorCode == 0x800401D0)
                     {
                         // CLIPBRD_E_CANT_OPEN - Wait and retry
-                        await Task.Delay(100);
+                        await Task.Delay(BenchmarkSemantics.Runtime.ClipboardRetryDelayMs);
                     }
                     catch (Exception ex)
                     {

@@ -98,6 +98,9 @@ namespace ContextMenuProfiler.UI.Core
         {
             public const int MaxParallelProbeTasks = 8;
             public const int IpcTimeoutLikeRoundtripThresholdMs = 1900;
+            public const int HookReconnectStabilizationDelayMs = 1000;
+            public const int ClipboardRetryAttempts = 5;
+            public const int ClipboardRetryDelayMs = 100;
         }
 
         public static bool IsPackagedExtensionType(string? type)
