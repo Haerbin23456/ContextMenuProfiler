@@ -100,7 +100,11 @@
 - 已建立语义中心：`ContextMenuProfiler.UI/Core/BenchmarkSemantics.cs`，集中类型/分类/状态常量与判定 helper。
 - 已清理 Dashboard 关键魔法值：`DashboardViewModel`、`Converters`、`DashboardPage.xaml` 改为语义常量或 `x:Static` 引用。
 - 已将 `StatusToVisibilityConverter` 参数从字符串升级为强类型枚举（`StatusVisibilityMode`），并完成 XAML 迁移。
-- 已扩展质量门禁：防止关键状态字面量、类别标签副本、旧式 converter 参数与语义 helper 退化回归。
+- 已补齐 IPC 语义中心：`ContextMenuProfiler.UI/Core/HookIpcSemantics.cs`，统一协议头、管道名、超时/重试、响应分隔符与 `NONE` token 常量。
+- 已将 `BenchmarkService` 详细状态文本全部迁移到 `LocalizationService`（`Dashboard.Detail.*`），中英文资源对齐并纳入门禁。
+- 已完成静态 Verb 位置/禁用规则语义化（`BuildStaticVerbRegistryLocation`、`IsStaticVerbRegistryPathDisabled`），清理 `Split` 与内联模板逻辑。
+- 已优化 `ResolveCategoryFromLocations` 为显式优先级解析（`Background > Drive > Folder > File`），并添加防回退门禁。
+- 已扩展质量门禁：防止关键状态字面量、类别标签副本、旧式 converter 参数与语义 helper（包含重试/超时/静态 Verb 规则）退化回归。
 
 ### 阶段 B：可靠性加固（P1）
 - 完成 IPC 全量迁移到类型化协议。
