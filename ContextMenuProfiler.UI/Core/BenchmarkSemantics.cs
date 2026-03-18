@@ -219,8 +219,6 @@ namespace ContextMenuProfiler.UI.Core
         public static class RegistryToken
         {
             public const string ExtensionPrefix = ".";
-            public const char ClsidOpenBrace = '{';
-            public const char ClsidCloseBrace = '}';
         }
 
         public static class StaticVerb
@@ -243,30 +241,21 @@ namespace ContextMenuProfiler.UI.Core
             public const uint ClipboardCantOpenHResult = 0x800401D0;
             public const long RealShellBenchmarkUnsupportedMs = -1;
             public const string SkipUnstableHandlersEnvVar = "CMP_SKIP_UNSTABLE_HANDLERS";
-            public const string EnabledFlagValue = "1";
-        }
-
-        public static class KnownUnstableHandlerToken
-        {
-            public const string PintoStartScreen = "PintoStartScreen";
-            public const string NvcplDesktopContext = "NvcplDesktopContext";
-            public const string NvAppDesktopContext = "NvAppDesktopContext";
-            public const string NvidiaCplContextMenuExtension = "NVIDIA CPL Context Menu Extension";
         }
 
         private static readonly string[] KnownUnstableHandlerTokens =
         {
-            KnownUnstableHandlerToken.PintoStartScreen,
-            KnownUnstableHandlerToken.NvcplDesktopContext,
-            KnownUnstableHandlerToken.NvAppDesktopContext,
-            KnownUnstableHandlerToken.NvidiaCplContextMenuExtension
+            "PintoStartScreen",
+            "NvcplDesktopContext",
+            "NvAppDesktopContext",
+            "NVIDIA CPL Context Menu Extension"
         };
 
         public static bool IsSkipUnstableHandlersEnabled()
         {
             return string.Equals(
                 Environment.GetEnvironmentVariable(Runtime.SkipUnstableHandlersEnvVar),
-                Runtime.EnabledFlagValue,
+                "1",
                 StringComparison.OrdinalIgnoreCase);
         }
 
@@ -399,8 +388,8 @@ namespace ContextMenuProfiler.UI.Core
 
             string trimmed = value.Trim();
             return trimmed.Length > 2
-                && trimmed[0] == RegistryToken.ClsidOpenBrace
-                && trimmed[^1] == RegistryToken.ClsidCloseBrace;
+                && trimmed[0] == '{'
+                && trimmed[^1] == '}';
         }
 
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)

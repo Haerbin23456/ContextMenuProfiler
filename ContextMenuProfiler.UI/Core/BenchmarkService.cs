@@ -404,65 +404,9 @@ namespace ContextMenuProfiler.UI.Core
             // Prevent infinite recursion or too deep nesting
             if (depth >= 3) return meta;
 
-            using (var key = ShellUtils.OpenClsidKey(clsidB))
+            if (!TryPopulateFromRegisteredClsid(clsid, clsidB, meta, depth))
             {
-                if (key != null)
-                {
-                    meta.Name = key.GetValue("") as string ?? "";
-                    meta.FriendlyName = key.GetValue(ComRegistrySemantics.FriendlyNameValueName) as string ?? "";
-
-                    // Try InprocServer32
-                    using (var serverKey = key.OpenSubKey(ComRegistrySemantics.InprocServer32SubKeyName))
-                    {
-                        if (serverKey != null)
-                        {
-                            meta.BinaryPath = serverKey.GetValue("") as string ?? "";
-                            meta.ThreadingModel = serverKey.GetValue(ComRegistrySemantics.ThreadingModelValueName) as string ?? "";
-                        }
-                    }
-
-                    // If no path, check TreatAs (Alias)
-                    if (string.IsNullOrEmpty(meta.BinaryPath))
-                    {
-                        string? treatAs = key.OpenSubKey(ComRegistrySemantics.TreatAsSubKeyName)?.GetValue("") as string;
-                        if (!string.IsNullOrEmpty(treatAs) && Guid.TryParse(treatAs, out Guid otherGuid) && otherGuid != clsid)
-                        {
-                            var otherMeta = QueryClsidMetadata(otherGuid, depth + 1);
-                            if (string.IsNullOrEmpty(meta.Name)) meta.Name = otherMeta.Name;
-                            meta.BinaryPath = otherMeta.BinaryPath;
-                            meta.ThreadingModel = otherMeta.ThreadingModel;
-                        }
-                    }
-
-                    // If still no path, check AppID (Surrogates)
-                    if (string.IsNullOrEmpty(meta.BinaryPath))
-                    {
-                        string? appId = key.GetValue(ComRegistrySemantics.AppIdValueName) as string;
-                        if (!string.IsNullOrEmpty(appId))
-                        {
-                            using (var appKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildAppIdPath(appId)))
-                            {
-                                string? dllSurrogate = appKey?.GetValue(ComRegistrySemantics.DllSurrogateValueName) as string;
-                                meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate) 
-                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), ComRegistrySemantics.DllHostExecutableName)
-                                    : (dllSurrogate ?? "");
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Check Packaged COM
-                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB)))
-                    {
-                        string? packageFullName = pkgKey?.GetValue("") as string;
-                        if (!string.IsNullOrEmpty(packageFullName))
-                        {
-                            meta.BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "";
-                            meta.Name = QueryPackagedDisplayName(clsidB) ?? "";
-                        }
-                    }
-                }
+                PopulateFromPackagedCom(clsid, clsidB, meta);
             }
 
             meta.Name = ShellUtils.ResolveMuiString(meta.Name);
@@ -470,6 +414,89 @@ namespace ContextMenuProfiler.UI.Core
                 meta.Name = Path.GetFileName(meta.BinaryPath);
 
             return meta;
+        }
+
+        private bool TryPopulateFromRegisteredClsid(Guid clsid, string clsidB, ClsidMetadata meta, int depth)
+        {
+            using var key = ShellUtils.OpenClsidKey(clsidB);
+            if (key == null)
+            {
+                return false;
+            }
+
+            meta.Name = key.GetValue("") as string ?? "";
+            meta.FriendlyName = key.GetValue(ComRegistrySemantics.FriendlyNameValueName) as string ?? "";
+            PopulateFromInprocServerKey(key, meta);
+
+            if (string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                PopulateFromTreatAsAlias(clsid, key, meta, depth);
+            }
+
+            if (string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                PopulateFromAppIdSurrogate(key, meta);
+            }
+
+            return true;
+        }
+
+        private static void PopulateFromInprocServerKey(RegistryKey clsidKey, ClsidMetadata meta)
+        {
+            using var serverKey = clsidKey.OpenSubKey(ComRegistrySemantics.InprocServer32SubKeyName);
+            if (serverKey == null)
+            {
+                return;
+            }
+
+            meta.BinaryPath = serverKey.GetValue("") as string ?? "";
+            meta.ThreadingModel = serverKey.GetValue(ComRegistrySemantics.ThreadingModelValueName) as string ?? "";
+        }
+
+        private void PopulateFromTreatAsAlias(Guid originalClsid, RegistryKey clsidKey, ClsidMetadata meta, int depth)
+        {
+            string? treatAs = clsidKey.OpenSubKey(ComRegistrySemantics.TreatAsSubKeyName)?.GetValue("") as string;
+            if (string.IsNullOrEmpty(treatAs) || !Guid.TryParse(treatAs, out Guid otherGuid) || otherGuid == originalClsid)
+            {
+                return;
+            }
+
+            var otherMeta = QueryClsidMetadata(otherGuid, depth + 1);
+            if (string.IsNullOrEmpty(meta.Name))
+            {
+                meta.Name = otherMeta.Name;
+            }
+
+            meta.BinaryPath = otherMeta.BinaryPath;
+            meta.ThreadingModel = otherMeta.ThreadingModel;
+        }
+
+        private static void PopulateFromAppIdSurrogate(RegistryKey clsidKey, ClsidMetadata meta)
+        {
+            string? appId = clsidKey.GetValue(ComRegistrySemantics.AppIdValueName) as string;
+            if (string.IsNullOrEmpty(appId))
+            {
+                return;
+            }
+
+            using var appKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildAppIdPath(appId));
+            string? dllSurrogate = appKey?.GetValue(ComRegistrySemantics.DllSurrogateValueName) as string;
+            meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), ComRegistrySemantics.DllHostExecutableName)
+                : (dllSurrogate ?? "");
+        }
+
+        private void PopulateFromPackagedCom(Guid clsid, string clsidB, ClsidMetadata meta)
+        {
+            using var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB));
+            string? packageFullName = pkgKey?.GetValue("") as string;
+            if (string.IsNullOrEmpty(packageFullName))
+            {
+                return;
+            }
+
+            meta.BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "";
+            meta.Name = QueryPackagedDisplayName(clsidB) ?? "";
         }
 
         private string? QueryPackagedDisplayName(string clsidB)

@@ -219,8 +219,6 @@ AssertTrue(
     && benchmarkSemanticsSource.Contains("IsDirectoryLikeAssociationType", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static class RegistryToken", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("ExtensionPrefix = \".\"", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("ClsidOpenBrace = '{'", StringComparison.Ordinal)
-    && benchmarkSemanticsSource.Contains("ClsidCloseBrace = '}'", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("public static bool LooksLikeBracedClsid", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRegistryScannerLocationHelpers"
 );
