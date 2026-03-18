@@ -140,6 +140,9 @@ string benchmarkServiceSource = File.ReadAllText(benchmarkServicePath);
 string benchmarkSemanticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkSemantics.cs");
 string benchmarkSemanticsSource = File.ReadAllText(benchmarkSemanticsPath);
 
+string benchmarkStatisticsPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\BenchmarkStatistics.cs");
+string benchmarkStatisticsSource = File.ReadAllText(benchmarkStatisticsPath);
+
 string packageScannerPath = FindFileUpward(@"ContextMenuProfiler.UI\Core\PackageScanner.cs");
 string packageScannerSource = File.ReadAllText(packageScannerPath);
 
@@ -169,6 +172,12 @@ AssertTrue(
     benchmarkSemanticsSource.Contains("MaxParallelProbeTasks = 8", StringComparison.Ordinal)
     && benchmarkSemanticsSource.Contains("IpcTimeoutLikeRoundtripThresholdMs = 1900", StringComparison.Ordinal),
     "BenchmarkSemanticsDefinesRuntimeProbeConstants"
+);
+
+AssertTrue(
+    benchmarkStatisticsSource.Contains("public static class BenchmarkStatisticsCalculator", StringComparison.Ordinal)
+    && benchmarkStatisticsSource.Contains("public static BenchmarkStatistics Calculate", StringComparison.Ordinal),
+    "BenchmarkStatisticsCalculatorExists"
 );
 
 AssertTrue(
@@ -230,6 +239,16 @@ AssertTrue(
 AssertTrue(
     dashboardViewModelSource.Contains("BenchmarkSemantics.IsPackagedExtensionType(item.Type)", StringComparison.Ordinal),
     "DashboardViewModelUsesPackagedTypeSemanticHelper"
+);
+
+AssertTrue(
+    dashboardViewModelSource.Contains("BenchmarkStatisticsCalculator.Calculate(Results)", StringComparison.Ordinal),
+    "DashboardViewModelUsesStatisticsCalculator"
+);
+
+AssertTrue(
+    !dashboardViewModelSource.Contains("foreach (var r in Results)", StringComparison.Ordinal),
+    "DashboardViewModelNoManualStatsAggregationLoop"
 );
 
 AssertTrue(

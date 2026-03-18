@@ -721,40 +721,17 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private void UpdateStats()
         {
-            // Simple optimization: only recalculate if results actually changed
-            // and use a single pass where possible
-            TotalExtensions = Results.Count;
-            
-            int disabledCount = 0;
-            long totalTime = 0;
-            long activeTime = 0;
-            long disabledTime = 0;
+            var stats = BenchmarkStatisticsCalculator.Calculate(Results);
 
-            foreach (var r in Results)
-            {
-                totalTime += r.TotalTime;
-                if (r.IsEnabled)
-                {
-                    activeTime += r.TotalTime;
-                }
-                else
-                {
-                    disabledCount++;
-                    disabledTime += r.TotalTime;
-                }
-            }
-
-            DisabledExtensions = disabledCount;
-            ActiveExtensions = TotalExtensions - disabledCount;
-            TotalLoadTime = totalTime;
-            ActiveLoadTime = activeTime;
-            DisabledLoadTime = disabledTime;
-
-            // "Real load" uses wall-clock IPC time when available; fall back to measured COM stage total.
-            long realLoadMs = Results
-                .Where(r => r.IsEnabled)
-                .Sum(r => r.WallClockTime > 0 ? r.WallClockTime : Math.Max(0, r.TotalTime));
-            RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : LocalizationService.Instance["Dashboard.Value.None"];
+            TotalExtensions = stats.TotalExtensions;
+            DisabledExtensions = stats.DisabledExtensions;
+            ActiveExtensions = stats.ActiveExtensions;
+            TotalLoadTime = stats.TotalLoadTime;
+            ActiveLoadTime = stats.ActiveLoadTime;
+            DisabledLoadTime = stats.DisabledLoadTime;
+            RealLoadTime = stats.RealLoadTimeMs > 0
+                ? $"{stats.RealLoadTimeMs} ms"
+                : LocalizationService.Instance["Dashboard.Value.None"];
         }
 
         public void Dispose()
