@@ -458,32 +458,28 @@ namespace ContextMenuProfiler.UI.Core
 
         private ClsidMetadata QueryClsidMetadata(Guid clsid, int depth = 0)
         {
-            var meta = new ClsidMetadata();
-            string clsidB = clsid.ToString("B");
-
-            // Prevent infinite recursion or too deep nesting
-            if (depth >= 3) return meta;
-
-            if (!TryPopulateFromRegisteredClsid(clsid, clsidB, meta, depth))
+            if (depth >= 3)
             {
-                PopulateFromPackagedCom(clsid, clsidB, meta);
+                return new ClsidMetadata();
             }
 
-            meta.Name = ShellUtils.ResolveMuiString(meta.Name);
-            if (string.IsNullOrEmpty(meta.Name) && !string.IsNullOrEmpty(meta.BinaryPath))
-                meta.Name = Path.GetFileName(meta.BinaryPath);
+            string clsidB = clsid.ToString("B");
+            var meta = TryQueryRegisteredClsidMetadata(clsid, clsidB, depth)
+                ?? TryQueryPackagedClsidMetadata(clsid, clsidB)
+                ?? new ClsidMetadata();
 
-            return meta;
+            return NormalizeClsidMetadata(meta);
         }
 
-        private bool TryPopulateFromRegisteredClsid(Guid clsid, string clsidB, ClsidMetadata meta, int depth)
+        private ClsidMetadata? TryQueryRegisteredClsidMetadata(Guid clsid, string clsidB, int depth)
         {
             using var key = ShellUtils.OpenClsidKey(clsidB);
             if (key == null)
             {
-                return false;
+                return null;
             }
 
+            var meta = new ClsidMetadata();
             meta.Name = key.GetValue("") as string ?? "";
             meta.FriendlyName = key.GetValue(ComRegistrySemantics.FriendlyNameValueName) as string ?? "";
             PopulateFromInprocServerKey(key, meta);
@@ -498,7 +494,34 @@ namespace ContextMenuProfiler.UI.Core
                 PopulateFromAppIdSurrogate(key, meta);
             }
 
-            return true;
+            return meta;
+        }
+
+        private ClsidMetadata? TryQueryPackagedClsidMetadata(Guid clsid, string clsidB)
+        {
+            using var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB));
+            string? packageFullName = pkgKey?.GetValue("") as string;
+            if (string.IsNullOrEmpty(packageFullName))
+            {
+                return null;
+            }
+
+            return new ClsidMetadata
+            {
+                BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "",
+                Name = QueryPackagedDisplayName(clsidB) ?? ""
+            };
+        }
+
+        private static ClsidMetadata NormalizeClsidMetadata(ClsidMetadata meta)
+        {
+            meta.Name = ShellUtils.ResolveMuiString(meta.Name);
+            if (string.IsNullOrEmpty(meta.Name) && !string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                meta.Name = Path.GetFileName(meta.BinaryPath);
+            }
+
+            return meta;
         }
 
         private static void PopulateFromInprocServerKey(RegistryKey clsidKey, ClsidMetadata meta)
@@ -544,19 +567,6 @@ namespace ContextMenuProfiler.UI.Core
             meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate)
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), ComRegistrySemantics.DllHostExecutableName)
                 : (dllSurrogate ?? "");
-        }
-
-        private void PopulateFromPackagedCom(Guid clsid, string clsidB, ClsidMetadata meta)
-        {
-            using var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB));
-            string? packageFullName = pkgKey?.GetValue("") as string;
-            if (string.IsNullOrEmpty(packageFullName))
-            {
-                return;
-            }
-
-            meta.BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "";
-            meta.Name = QueryPackagedDisplayName(clsidB) ?? "";
         }
 
         private string? QueryPackagedDisplayName(string clsidB)
