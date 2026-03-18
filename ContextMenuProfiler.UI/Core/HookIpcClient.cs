@@ -47,10 +47,10 @@ namespace ContextMenuProfiler.UI.Core
             try
             {
                 // Default bait path if none provided
-                string path = contextPath ?? Path.Combine(Path.GetTempPath(), "ContextMenuProfiler_probe.txt");
+                string path = contextPath ?? Path.Combine(Path.GetTempPath(), HookIpcSemantics.Runtime.ProbeFileName);
                 if (!File.Exists(path) && !Directory.Exists(path))
                 {
-                    try { File.WriteAllText(path, "probe"); } catch {}
+                    try { File.WriteAllText(path, HookIpcSemantics.Runtime.ProbeFileContent); } catch {}
                 }
 
                 for (int attempt = 0; attempt < HookIpcSemantics.Runtime.MaxAttempts; attempt++)
@@ -76,7 +76,7 @@ namespace ContextMenuProfiler.UI.Core
                                 swConnect.Stop();
                                 result.connect_ms += Math.Max(0, (long)swConnect.Elapsed.TotalMilliseconds);
                                 Debug.WriteLine($"[IPC DIAG] Connection Failed: {ex.Message}");
-                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                                if (ShouldRetry(attempt))
                                 {
                                     await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
@@ -109,7 +109,7 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                                if (ShouldRetry(attempt))
                                 {
                                     await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
@@ -121,7 +121,7 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                                if (ShouldRetry(attempt))
                                 {
                                     await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
@@ -140,7 +140,7 @@ namespace ContextMenuProfiler.UI.Core
                                 }
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                                if (ShouldRetry(attempt))
                                 {
                                     await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
@@ -151,7 +151,7 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 swRoundTrip.Stop();
                                 result.roundtrip_ms += Math.Max(0, (long)swRoundTrip.Elapsed.TotalMilliseconds);
-                                if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                                if (ShouldRetry(attempt))
                                 {
                                     await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                                     continue;
@@ -163,7 +163,7 @@ namespace ContextMenuProfiler.UI.Core
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"[IPC DIAG] Critical Error: {ex.Message}");
-                        if (attempt < HookIpcSemantics.Runtime.MaxAttempts - 1)
+                        if (ShouldRetry(attempt))
                         {
                             await Task.Delay(HookIpcSemantics.Runtime.RetryDelayMs);
                             continue;
@@ -196,6 +196,11 @@ namespace ContextMenuProfiler.UI.Core
             return data.names.Split('|', StringSplitOptions.RemoveEmptyEntries);
         }
 
+        private static bool ShouldRetry(int attempt)
+        {
+            return attempt < HookIpcSemantics.Runtime.MaxAttempts - 1;
+        }
+
         internal static string BuildRequest(string clsid, string path, string? dllHint)
         {
             string header =
@@ -219,8 +224,8 @@ namespace ContextMenuProfiler.UI.Core
 
         private static async Task<string> ReadResponseAsync(NamedPipeClientStream client, CancellationToken token)
         {
-            var sb = new StringBuilder(1024);
-            byte[] buffer = new byte[4096];
+            var sb = new StringBuilder(HookIpcSemantics.Runtime.InitialResponseCapacity);
+            byte[] buffer = new byte[HookIpcSemantics.Runtime.ReadChunkSize];
             while (true)
             {
                 int read = await client.ReadAsync(buffer, 0, buffer.Length, token);

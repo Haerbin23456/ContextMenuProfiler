@@ -189,7 +189,11 @@ AssertTrue(
 AssertTrue(
     hookIpcSemanticsSource.Contains("VersionPrefix = \"CMP1\"", StringComparison.Ordinal)
     && hookIpcSemanticsSource.Contains("ModeAuto = \"AUTO\"", StringComparison.Ordinal)
-    && hookIpcSemanticsSource.Contains("PipeName = \"ContextMenuProfilerHook\"", StringComparison.Ordinal),
+    && hookIpcSemanticsSource.Contains("PipeName = \"ContextMenuProfilerHook\"", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("ProbeFileName = \"ContextMenuProfiler_probe.txt\"", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("ProbeFileContent = \"probe\"", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("InitialResponseCapacity = 1024", StringComparison.Ordinal)
+    && hookIpcSemanticsSource.Contains("ReadChunkSize = 4096", StringComparison.Ordinal),
     "HookIpcSemanticsDefinesProtocolAndPipeConstants"
 );
 
@@ -197,7 +201,12 @@ AssertTrue(
     hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxConcurrentCalls", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.MaxAttempts", StringComparison.Ordinal)
     && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.RetryDelayMs", StringComparison.Ordinal)
-    && hookIpcClientSource.Contains("HookIpcSemantics.Protocol.VersionPrefix", StringComparison.Ordinal),
+    && hookIpcClientSource.Contains("HookIpcSemantics.Protocol.VersionPrefix", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileName", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ProbeFileContent", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.InitialResponseCapacity", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("HookIpcSemantics.Runtime.ReadChunkSize", StringComparison.Ordinal)
+    && hookIpcClientSource.Contains("ShouldRetry(attempt)", StringComparison.Ordinal),
     "HookIpcClientUsesIpcSemanticsConstants"
 );
 
@@ -208,7 +217,10 @@ AssertTrue(
     && !hookIpcClientSource.Contains("private const int ConnectTimeoutMs", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("private const int RoundTripTimeoutMs", StringComparison.Ordinal)
     && !hookIpcClientSource.Contains("Task.Delay(80)", StringComparison.Ordinal)
-    && !hookIpcClientSource.Contains("attempt == 0", StringComparison.Ordinal),
+    && !hookIpcClientSource.Contains("attempt == 0", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("ContextMenuProfiler_probe.txt", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("new StringBuilder(1024)", StringComparison.Ordinal)
+    && !hookIpcClientSource.Contains("new byte[4096]", StringComparison.Ordinal),
     "HookIpcClientNoLegacyInlineProtocolRuntimeLiterals"
 );
 

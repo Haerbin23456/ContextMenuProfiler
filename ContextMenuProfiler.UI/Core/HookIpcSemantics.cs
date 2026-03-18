@@ -17,6 +17,10 @@ namespace ContextMenuProfiler.UI.Core
             public const int MaxConcurrentCalls = 3;
             public const int MaxAttempts = 2;
             public const int RetryDelayMs = 80;
+            public const string ProbeFileName = "ContextMenuProfiler_probe.txt";
+            public const string ProbeFileContent = "probe";
+            public const int InitialResponseCapacity = 1024;
+            public const int ReadChunkSize = 4096;
         }
     }
 }
