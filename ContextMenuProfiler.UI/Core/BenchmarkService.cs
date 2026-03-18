@@ -45,6 +45,7 @@ namespace ContextMenuProfiler.UI.Core
         public string? IconSource { get; set; }
         public string? LocationSummary { get; set; }
         public string Category { get; set; } = BenchmarkSemantics.Category.File;
+        public List<string>? ObservedMenuDisplayNames { get; set; }
     }
 
     internal class ClsidMetadata
@@ -473,11 +474,13 @@ namespace ContextMenuProfiler.UI.Core
             result.InterfaceType = hookData.@interface;
             if (!string.IsNullOrEmpty(hookData.names))
             {
+                result.ObservedMenuDisplayNames = ParseHookMenuDisplayNames(hookData.names);
+
                 if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
                 {
-                    result.Name = hookData.names.Replace(
-                        HookIpcSemantics.Response.MultiValueDelimiter.ToString(),
-                        ", ");
+                    result.Name = string.Join(
+                        ", ",
+                        result.ObservedMenuDisplayNames);
                 }
 
                 if (result.Status == BenchmarkSemantics.Status.Unknown)
@@ -501,6 +504,16 @@ namespace ContextMenuProfiler.UI.Core
             result.InitTime = (long)hookData.init_ms;
             result.QueryTime = (long)hookData.query_ms;
             result.TotalTime = result.CreateTime + result.InitTime + result.QueryTime;
+        }
+
+        private static List<string> ParseHookMenuDisplayNames(string names)
+        {
+            return names
+                .Split(HookIpcSemantics.Response.MultiValueDelimiter)
+                .Select(n => n.Trim())
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
         }
 
         private static string? ResolveHookIconLocation(HookResponse hookData)
@@ -884,6 +897,9 @@ namespace ContextMenuProfiler.UI.Core
                 ["source"] = source,
                 ["clsid"] = result.Clsid?.ToString("B"),
                 ["name"] = result.Name,
+                ["friendly_name"] = result.FriendlyName,
+                ["observed_menu_display_names"] = result.ObservedMenuDisplayNames,
+                ["observed_menu_display_name_count"] = result.ObservedMenuDisplayNames?.Count ?? 0,
                 ["type"] = result.Type,
                 ["status"] = result.Status,
                 ["total_ms"] = result.TotalTime,
