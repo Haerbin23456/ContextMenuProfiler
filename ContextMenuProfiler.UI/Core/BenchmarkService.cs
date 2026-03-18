@@ -121,8 +121,6 @@ namespace ContextMenuProfiler.UI.Core
                 {
                     var clsid = clsidEntry.Key;
                     var handlerInfos = clsidEntry.Value;
-
-                    if (resultsMap.ContainsKey(clsid)) return;
                     var meta = QueryClsidMetadata(clsid);
                     var result = new BenchmarkResult
                     {
@@ -142,17 +140,13 @@ namespace ContextMenuProfiler.UI.Core
                             clsid);
                     }
 
-                    resultsMap[clsid] = result;
+                    if (!resultsMap.TryAdd(clsid, result))
+                    {
+                        return;
+                    }
+
                     result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
-
-                    await EnrichBenchmarkResultAsync(result, hookContextPath);
-
-                    bool isBlocked = ExtensionManager.IsExtensionBlocked(clsid);
-                    bool hasDisabledPath = result.RegistryEntries.Any(e => BenchmarkSemantics.IsDisabledRegistryLocation(e.Location));
-                    result.IsEnabled = !isBlocked && !hasDisabledPath;
-                    result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
-
-                    AddAndReportResult(allResults, result, progress);
+                    await ProcessMeasuredResultAsync(result, hookContextPath, allResults, progress);
                 }));
 
             await Task.WhenAll(comTasks);
@@ -184,17 +178,17 @@ namespace ContextMenuProfiler.UI.Core
             IProgress<BenchmarkResult>? progress)
         {
             var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
-                .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
+                .Where(r => r.Clsid.HasValue)
                 .Select(uwpResult =>
                     RunWithSemaphoreAsync(semaphore, async () =>
                     {
+                        if (!resultsMap.TryAdd(uwpResult.Clsid!.Value, uwpResult))
+                        {
+                            return;
+                        }
+
                         uwpResult.Category = BenchmarkSemantics.Category.Uwp;
-                        await EnrichBenchmarkResultAsync(uwpResult, hookContextPath);
-
-                        uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
-                        uwpResult.LocationSummary = BenchmarkSemantics.LocationSummary.ModernShellUwp;
-
-                        AddAndReportResult(allResults, uwpResult, progress);
+                        await ProcessMeasuredResultAsync(uwpResult, hookContextPath, allResults, progress);
                     }));
 
             await Task.WhenAll(uwpTasks);
@@ -220,6 +214,44 @@ namespace ContextMenuProfiler.UI.Core
         {
             allResults.Add(result);
             progress?.Report(result);
+        }
+
+        private async Task ProcessMeasuredResultAsync(
+            BenchmarkResult result,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            IProgress<BenchmarkResult>? progress)
+        {
+            await EnrichBenchmarkResultAsync(result, hookContextPath);
+            result.IsEnabled = ResolveEnabledState(result);
+            result.LocationSummary = ResolveLocationSummary(result);
+            AddAndReportResult(allResults, result, progress);
+        }
+
+        private static bool ResolveEnabledState(BenchmarkResult result)
+        {
+            bool isBlocked = result.Clsid.HasValue && ExtensionManager.IsExtensionBlocked(result.Clsid.Value);
+            if (isBlocked)
+            {
+                return false;
+            }
+
+            if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
+            {
+                return !result.RegistryEntries.Any(e => BenchmarkSemantics.IsDisabledRegistryLocation(e.Location));
+            }
+
+            return true;
+        }
+
+        private static string ResolveLocationSummary(BenchmarkResult result)
+        {
+            if (BenchmarkSemantics.IsPackagedExtensionType(result.Type))
+            {
+                return BenchmarkSemantics.LocationSummary.ModernShellUwp;
+            }
+
+            return string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
         }
 
         private BenchmarkResult? CreateStaticVerbResult(string key, List<string> paths)
