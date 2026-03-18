@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 
@@ -26,28 +27,54 @@ namespace ContextMenuProfiler.UI.Core
 
     public class RegistryScanner
     {
+        private static readonly (string Path, string Location)[] GlobalHandlerLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFiles),
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.AllFiles))
+        };
+
+        private static readonly (string Path, string Location)[] DirectoryScopedHandlerLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlers, BenchmarkSemantics.RegistryLocationLabel.Directory),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryHandlersDisabled, BenchmarkSemantics.BuildDisabledRegistryLocationLabel(BenchmarkSemantics.RegistryLocationLabel.Directory)),
+            (BenchmarkSemantics.RegistryPathPattern.FolderHandlers, BenchmarkSemantics.RegistryLocationLabel.Folder),
+            (BenchmarkSemantics.RegistryPathPattern.DriveHandlers, BenchmarkSemantics.RegistryLocationLabel.Drive),
+            (BenchmarkSemantics.RegistryPathPattern.AllFileSystemObjectsHandlers, BenchmarkSemantics.RegistryLocationLabel.AllFileSystemObjects),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+            (BenchmarkSemantics.RegistryPathPattern.DesktopBackgroundHandlers, BenchmarkSemantics.RegistryLocationLabel.DesktopBackground)
+        };
+
+        private static readonly (string Path, string Location)[] GlobalShellLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.AllFilesShell, BenchmarkSemantics.RegistryLocationLabel.AllFiles)
+        };
+
+        private static readonly (string Path, string Location)[] DirectoryScopedShellLocations =
+        {
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryShell, BenchmarkSemantics.RegistryLocationLabel.Directory),
+            (BenchmarkSemantics.RegistryPathPattern.DirectoryBackgroundShell, BenchmarkSemantics.RegistryLocationLabel.DirectoryBackground),
+            (BenchmarkSemantics.RegistryPathPattern.DriveShell, BenchmarkSemantics.RegistryLocationLabel.Drive),
+            (BenchmarkSemantics.RegistryPathPattern.FolderShell, BenchmarkSemantics.RegistryLocationLabel.Folder)
+        };
+
+        private readonly struct TargetAssociationContext
+        {
+            public TargetAssociationContext(bool isDirectory, string associationType)
+            {
+                IsDirectory = isDirectory;
+                AssociationType = associationType;
+            }
+
+            public bool IsDirectory { get; }
+            public string AssociationType { get; }
+        }
+
         public static Dictionary<Guid, List<RegistryHandlerInfo>> ScanHandlers(ScanMode mode = ScanMode.Targeted)
         {
             var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
 
-            // 1. Scan Global Locations (Fast & Essential)
-            var commonLocations = new[]
-            {
-                (@"*\shellex\ContextMenuHandlers", "All Files (*)"),
-                (@"*\shellex\-ContextMenuHandlers", "All Files (*) [Disabled]"),
-                (@"Directory\shellex\ContextMenuHandlers", "Directory"),
-                (@"Directory\shellex\-ContextMenuHandlers", "Directory [Disabled]"),
-                (@"Folder\shellex\ContextMenuHandlers", "Folder"),
-                (@"Drive\shellex\ContextMenuHandlers", "Drive"),
-                (@"AllFileSystemObjects\shellex\ContextMenuHandlers", "All File System Objects"),
-                (@"Directory\Background\shellex\ContextMenuHandlers", "Directory Background"),
-                (@"DesktopBackground\shellex\ContextMenuHandlers", "Desktop Background")
-            };
-
-            foreach (var loc in commonLocations)
-            {
-                ScanLocation(handlers, loc.Item1, loc.Item2);
-            }
+            ScanHandlerLocations(handlers, GlobalHandlerLocations);
+            ScanHandlerLocations(handlers, DirectoryScopedHandlerLocations);
 
             // 2. Scan Extensions (Only if Full mode)
             if (mode == ScanMode.Full)
@@ -62,25 +89,45 @@ namespace ContextMenuProfiler.UI.Core
 
                 Parallel.ForEach(rootKeys, options, keyName =>
                 {
-                    if (keyName.StartsWith("."))
+                    if (keyName.StartsWith(BenchmarkSemantics.RegistryToken.ExtensionPrefix, StringComparison.Ordinal))
                     {
                         // It's an extension
                         // Check SystemFileAssociations
-                        ScanLocation(handlers, $"SystemFileAssociations\\{keyName}\\shellex\\ContextMenuHandlers", $"Extension ({keyName})");
-                        ScanLocation(handlers, $"SystemFileAssociations\\{keyName}\\shellex\\-ContextMenuHandlers", $"Extension ({keyName}) [Disabled]");
+                        string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(keyName);
+                        ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(keyName, disabled: false), extensionLocation);
+                        ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(keyName, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
 
                         // Get ProgID
                         string? progId = GetProgID(keyName);
                         if (!string.IsNullOrEmpty(progId))
                         {
-                            ScanLocation(handlers, $"{progId}\\shellex\\ContextMenuHandlers", $"ProgID ({progId} for {keyName})");
-                            ScanLocation(handlers, $"{progId}\\shellex\\-ContextMenuHandlers", $"ProgID ({progId} for {keyName}) [Disabled]");
+                            string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, keyName);
+                            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
+                            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
                         }
                     }
                 });
             }
 
             // Convert back to regular Dictionary
+            return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
+        }
+
+        public static Dictionary<Guid, List<RegistryHandlerInfo>> ScanHandlersForPath(string targetPath)
+        {
+            var handlers = new ConcurrentDictionary<Guid, List<RegistryHandlerInfo>>();
+            var context = ResolveTargetAssociationContext(targetPath);
+
+            ScanHandlerLocations(handlers, GlobalHandlerLocations);
+
+            if (context.IsDirectory)
+            {
+                ScanHandlerLocations(handlers, DirectoryScopedHandlerLocations);
+                return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
+            }
+
+            ScanFileAssociationHandlers(handlers, context.AssociationType);
+
             return new Dictionary<Guid, List<RegistryHandlerInfo>>(handlers);
         }
 
@@ -94,47 +141,23 @@ namespace ContextMenuProfiler.UI.Core
                     if (key == null) return;
                     foreach (var subKeyName in key.GetSubKeyNames())
                     {
+                        if (!TryResolveClsid(key, subKeyName, out Guid clsid) || clsid == Guid.Empty)
+                        {
+                            continue;
+                        }
+
                         string trimmedName = subKeyName.Trim();
-                        Guid clsid = Guid.Empty;
-                        bool found = false;
+                        var info = new RegistryHandlerInfo {
+                            Path = $@"{subKeyPath}\{subKeyName}",
+                            Location = BenchmarkSemantics.BuildRegistryHandlerLocation(locationName, trimmedName)
+                        };
 
-                        // Pattern 1: Key name is the CLSID (e.g. {GUID})
-                        if (trimmedName.StartsWith("{") && trimmedName.EndsWith("}") && Guid.TryParse(trimmedName, out clsid))
+                        var list = handlers.GetOrAdd(clsid, _ => new List<RegistryHandlerInfo>());
+                        lock (list)
                         {
-                            found = true;
-                        }
-
-                        // Pattern 2: Default value is the CLSID
-                        if (!found)
-                        {
-                            using (var subKey = key.OpenSubKey(subKeyName))
+                            if (!list.Any(i => i.Path == info.Path))
                             {
-                                object? val = subKey?.GetValue("");
-                                if (val is string guidStr)
-                                {
-                                    string trimmedGuid = guidStr.Trim();
-                                    if (trimmedGuid.StartsWith("{") && Guid.TryParse(trimmedGuid, out clsid))
-                                    {
-                                        found = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (found && clsid != Guid.Empty)
-                        {
-                            var info = new RegistryHandlerInfo { 
-                                Path = $@"{subKeyPath}\{subKeyName}",
-                                Location = $"{locationName} ({trimmedName})"
-                            };
-
-                            var list = handlers.GetOrAdd(clsid, _ => new List<RegistryHandlerInfo>());
-                            lock (list)
-                            {
-                                if (!list.Any(i => i.Path == info.Path))
-                                {
-                                    list.Add(info);
-                                }
+                                list.Add(info);
                             }
                         }
                     }
@@ -144,6 +167,31 @@ namespace ContextMenuProfiler.UI.Core
             {
                 LogService.Instance.Error($"ScanLocation failed for {subKeyPath}", ex);
             }
+        }
+
+        private static bool TryResolveClsid(RegistryKey parentKey, string subKeyName, out Guid clsid)
+        {
+            if (TryParseBracedClsid(subKeyName, out clsid))
+            {
+                return true;
+            }
+
+            using var subKey = parentKey.OpenSubKey(subKeyName);
+            string? guidStr = subKey?.GetValue("") as string;
+            return TryParseBracedClsid(guidStr, out clsid);
+        }
+
+        private static bool TryParseBracedClsid(string? value, out Guid clsid)
+        {
+            clsid = Guid.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string trimmed = value.Trim();
+            return BenchmarkSemantics.LooksLikeBracedClsid(trimmed)
+                && Guid.TryParse(trimmed, out clsid);
         }
 
         private static string? GetProgID(string ext)
@@ -166,22 +214,98 @@ namespace ContextMenuProfiler.UI.Core
         {
             var verbs = new ConcurrentDictionary<string, List<string>>();
 
-            // 1. Scan Global Locations
-            var shellLocations = new[]
-            {
-                (@"*\shell", "All Files (*)"),
-                (@"Directory\shell", "Directory"),
-                (@"Directory\Background\shell", "Directory Background"),
-                (@"Drive\shell", "Drive"),
-                (@"Folder\shell", "Folder")
-            };
-
-            foreach (var loc in shellLocations)
-            {
-                ScanShellKey(verbs, loc.Item1, loc.Item2);
-            }
+            ScanShellLocations(verbs, GlobalShellLocations);
+            ScanShellLocations(verbs, DirectoryScopedShellLocations);
 
             return new Dictionary<string, List<string>>(verbs);
+        }
+
+        public static Dictionary<string, List<string>> ScanStaticVerbsForPath(string targetPath)
+        {
+            var verbs = new ConcurrentDictionary<string, List<string>>();
+            var context = ResolveTargetAssociationContext(targetPath);
+
+            ScanShellLocations(verbs, GlobalShellLocations);
+
+            if (context.IsDirectory)
+            {
+                ScanShellLocations(verbs, DirectoryScopedShellLocations);
+                return new Dictionary<string, List<string>>(verbs);
+            }
+
+            ScanFileAssociationShellVerbs(verbs, context.AssociationType);
+
+            return new Dictionary<string, List<string>>(verbs);
+        }
+
+        private static TargetAssociationContext ResolveTargetAssociationContext(string targetPath)
+        {
+            bool isDirectory = Directory.Exists(targetPath);
+            string associationType = isDirectory
+                ? BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType
+                : Path.GetExtension(targetPath).ToLowerInvariant();
+
+            return new TargetAssociationContext(isDirectory, associationType);
+        }
+
+        private static void ScanHandlerLocations(
+            ConcurrentDictionary<Guid, List<RegistryHandlerInfo>> handlers,
+            IEnumerable<(string Path, string Location)> locations)
+        {
+            foreach (var location in locations)
+            {
+                ScanLocation(handlers, location.Path, location.Location);
+            }
+        }
+
+        private static void ScanShellLocations(
+            ConcurrentDictionary<string, List<string>> verbs,
+            IEnumerable<(string Path, string Location)> locations)
+        {
+            foreach (var location in locations)
+            {
+                ScanShellKey(verbs, location.Path, location.Location);
+            }
+        }
+
+        private static void ScanFileAssociationHandlers(ConcurrentDictionary<Guid, List<RegistryHandlerInfo>> handlers, string extension)
+        {
+            if (string.IsNullOrEmpty(extension))
+            {
+                return;
+            }
+
+            string extensionLocation = BenchmarkSemantics.BuildExtensionRegistryLocationLabel(extension);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(extension, disabled: false), extensionLocation);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationHandlers(extension, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(extensionLocation));
+
+            string? progId = GetProgID(extension);
+            if (string.IsNullOrEmpty(progId))
+            {
+                return;
+            }
+
+            string progIdLocation = BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, extension);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: false), progIdLocation);
+            ScanLocation(handlers, BenchmarkSemantics.RegistryPathPattern.BuildProgIdHandlers(progId, disabled: true), BenchmarkSemantics.BuildDisabledRegistryLocationLabel(progIdLocation));
+        }
+
+        private static void ScanFileAssociationShellVerbs(ConcurrentDictionary<string, List<string>> verbs, string extension)
+        {
+            if (string.IsNullOrEmpty(extension))
+            {
+                return;
+            }
+
+            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildSystemFileAssociationShell(extension), BenchmarkSemantics.BuildExtensionRegistryLocationLabel(extension));
+
+            string? progId = GetProgID(extension);
+            if (string.IsNullOrEmpty(progId))
+            {
+                return;
+            }
+
+            ScanShellKey(verbs, BenchmarkSemantics.RegistryPathPattern.BuildProgIdShell(progId), BenchmarkSemantics.BuildProgIdRegistryLocationLabel(progId, extension));
         }
 
         private static void ScanShellKey(ConcurrentDictionary<string, List<string>> verbs, string subKeyPath, string locationName)
@@ -194,8 +318,7 @@ namespace ContextMenuProfiler.UI.Core
                     foreach (var verbName in key.GetSubKeyNames())
                     {
                         // Ignore some system defaults that are usually not interesting or dangerous to touch
-                        if (verbName.Equals("Attributes", StringComparison.OrdinalIgnoreCase) || 
-                            verbName.Equals("AnyCode", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)) continue;
 
                         using (var verbKey = key.OpenSubKey(verbName))
                         {
@@ -203,7 +326,7 @@ namespace ContextMenuProfiler.UI.Core
 
                             // Get Command
                             string command = "";
-                            using (var commandKey = verbKey.OpenSubKey("command"))
+                            using (var commandKey = verbKey.OpenSubKey(BenchmarkSemantics.StaticVerb.CommandSubKeyName))
                             {
                                 command = commandKey?.GetValue("") as string ?? "";
                             }
@@ -213,25 +336,26 @@ namespace ContextMenuProfiler.UI.Core
                             if (string.IsNullOrEmpty(command)) continue;
 
                             // Get Display Name (MUIVerb > Default)
-                            string? displayName = verbKey.GetValue("MUIVerb") as string;
+                            string? displayName = verbKey.GetValue(BenchmarkSemantics.StaticVerb.MuiVerbValueName) as string;
                             if (string.IsNullOrEmpty(displayName))
                             {
                                 displayName = verbKey.GetValue("") as string; // Default value
                             }
 
                             // Resolve MUI string if necessary
-                            if (!string.IsNullOrEmpty(displayName) && displayName.StartsWith("@"))
+                            if (!string.IsNullOrEmpty(displayName)
+                                && displayName.StartsWith(BenchmarkSemantics.IconLocation.IndirectStringPrefix, StringComparison.Ordinal))
                             {
                                 displayName = ShellUtils.ResolveMuiString(displayName);
                             }
 
                             if (string.IsNullOrEmpty(displayName))
                             {
-                                displayName = verbName.TrimStart('-'); // Fallback to key name
+                                displayName = verbName.TrimStart(BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefixChar); // Fallback to key name
                             }
 
                             // Use unique key: "Name|Command" to distinguish same name but different command
-                            string uniqueKey = $"{displayName}|{command}";
+                            string uniqueKey = BenchmarkSemantics.BuildStaticVerbUniqueKey(displayName, command);
                             
                             var list = verbs.GetOrAdd(uniqueKey, _ => new List<string>());
                             lock (list)

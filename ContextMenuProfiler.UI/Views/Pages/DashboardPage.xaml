@@ -7,6 +7,7 @@
       xmlns:pages="clr-namespace:ContextMenuProfiler.UI.Views.Pages"
       xmlns:viewmodels="clr-namespace:ContextMenuProfiler.UI.ViewModels"
       xmlns:converters="clr-namespace:ContextMenuProfiler.UI.Converters"
+      xmlns:core="clr-namespace:ContextMenuProfiler.UI.Core"
       xmlns:services="clr-namespace:ContextMenuProfiler.UI.Core.Services"
       xmlns:helpers="clr-namespace:ContextMenuProfiler.UI.Core.Helpers"
       mc:Ignorable="d" 
@@ -20,6 +21,7 @@
     <Page.Resources>
         <converters:TypeToIconConverter x:Key="TypeToIconConverter"/>
         <converters:StatusToVisibilityConverter x:Key="StatusToVisibilityConverter"/>
+        <converters:StatusToLocalizedTextConverter x:Key="StatusToLocalizedTextConverter"/>
         <converters:IconToImageConverter x:Key="IconToImageConverter"/>
         <converters:StringNullOrEmptyToVisibilityConverter x:Key="StringNullOrEmptyToVisibilityConverter"/>
         <converters:LoadTimeToBrushConverter x:Key="LoadTimeToBrushConverter"/>
@@ -47,7 +49,7 @@
             <!-- Hook Warning Banner -->
             <Border Grid.Row="0"
                     Margin="0,0,0,16"
-                    Visibility="{Binding CurrentHookStatus, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter=NotActive}"
+                    Visibility="{Binding CurrentHookStatus, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter={x:Static converters:StatusVisibilityMode.NotActive}}"
                     Padding="16,14,16,10"
                     BorderThickness="1"
                     CornerRadius="{DynamicResource ControlCornerRadius}"
@@ -342,16 +344,16 @@
                                                         <Setter Property="Foreground" Value="#FFC107"/> <!-- Default Yellow for Warnings -->
                                                         <Setter Property="Visibility" Value="{Binding Status, Converter={StaticResource StatusToVisibilityConverter}}"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Registry Fallback">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusRegistryFallback}">
                                                                 <Setter Property="Foreground" Value="#FFC107"/> <!-- Yellow for global Hook failure -->
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Hook Loaded (No Menu)">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusHookLoadedNoMenu}">
                                                                 <Setter Property="Foreground" Value="#FFC107"/> <!-- Yellow for empty menu -->
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                            <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                 <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -378,16 +380,16 @@
                                                     
                                                     <!-- Warning for Missing Hook Data -->
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8" 
-                                                                Visibility="{Binding Status, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter=Fallback}">
+                                                                Visibility="{Binding Status, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter={x:Static converters:StatusVisibilityMode.Fallback}}">
                                                         <ui:SymbolIcon Symbol="Warning24" Margin="0,0,8,0">
                                                             <ui:SymbolIcon.Style>
                                                                 <Style TargetType="ui:SymbolIcon">
                                                                     <Setter Property="Foreground" Value="#FFC107"/> <!-- Default Yellow -->
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
@@ -399,10 +401,10 @@
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Foreground" Value="#FFC107"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
@@ -472,16 +474,16 @@
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Registry Fallback">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusRegistryFallback}">
                                                             <Setter Property="Foreground" Value="#FFC107"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Hook Loaded (No Menu)">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusHookLoadedNoMenu}">
                                                             <Setter Property="Foreground" Value="#FFC107"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Load Error">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusLoadError}">
                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Orphaned / Missing DLL">
+                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static core:BenchmarkSemantics.StatusOrphanedMissingDll}">
                                                             <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -543,6 +545,11 @@
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Dashboard.Label.Details], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Margin="0,0,16,8" VerticalAlignment="Top"/>
                                     <WrapPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
                                         <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
+                                            <TextBlock Text="{Binding [Dashboard.Label.Status], Source={x:Static services:LocalizationService.Instance}}" Opacity="0.6"/>
+                                            <TextBlock Text="{Binding Status, Converter={StaticResource StatusToLocalizedTextConverter}}" FontWeight="Medium"/>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
                                             <TextBlock Text="{Binding [Dashboard.Label.Interface], Source={x:Static services:LocalizationService.Instance}}" Opacity="0.6"/>
                                             <TextBlock Text="{Binding InterfaceType, Converter={StaticResource NullOrEmptyToLocalizedConverter}, ConverterParameter=Dashboard.Value.Unknown}" FontWeight="Medium"/>
                                         </StackPanel>
@@ -603,7 +610,7 @@
                                     <ui:Button Content="{Binding [Dashboard.Action.DeletePermanently], Source={x:Static services:LocalizationService.Instance}}" Appearance="Danger" Icon="{ui:SymbolIcon Symbol=Delete24}"
                                                Command="{Binding DataContext.DeleteExtensionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                CommandParameter="{Binding}"
-                                               Visibility="{Binding Type, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter=NotUWP}"/>
+                                               Visibility="{Binding Type, Converter={StaticResource StatusToVisibilityConverter}, ConverterParameter={x:Static converters:StatusVisibilityMode.NotPackaged}}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Expander>

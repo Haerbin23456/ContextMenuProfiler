@@ -29,6 +29,10 @@
 - .NET 8 SDK
 
 ### 构建与运行
+0. （推荐）先做本地完整验证：`scripts\verify_local.bat`
+   - 会按顺序执行 Hook 构建（验证模式）、`dotnet build`、`QualityChecks`。
+   - 验证模式会设置 `CMP_SKIP_ROOT_COPY=1`，避免 Explorer 占用 DLL 时因为复制失败中断验证。
+   - 交互回归可按 `docs/SMOKE_CHECKLIST.md` 执行。
 1. 以管理员身份运行 `scripts\redeploy.bat`。
    - 脚本会自动查找您的 Visual Studio 安装路径，构建 Hook DLL 并将其注入到 Explorer 中。
 2. 打开 `ContextMenuProfiler.UI` 开始扫描。

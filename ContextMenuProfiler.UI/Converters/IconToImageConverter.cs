@@ -14,6 +14,7 @@ using Windows.ApplicationModel;
 using System.Linq;
 
 using System.Collections.Concurrent;
+using ContextMenuProfiler.UI.Core;
 
 namespace ContextMenuProfiler.UI.Converters
 {
@@ -29,7 +30,7 @@ namespace ContextMenuProfiler.UI.Converters
                 // 解析 URI 和可选的 Binary Hint
                 string actualUri = uriStr;
                 string? hintDllPath = null;
-                int pipeIndex = uriStr.IndexOf('|');
+                int pipeIndex = uriStr.IndexOf(BenchmarkSemantics.IconLocation.HintSeparator);
                 if (pipeIndex > 0) {
                     actualUri = uriStr.Substring(0, pipeIndex);
                     hintDllPath = uriStr.Substring(pipeIndex + 1);
@@ -72,8 +73,10 @@ namespace ContextMenuProfiler.UI.Converters
                             string fileName = Path.GetFileNameWithoutExtension(fullPath);
                             string ext = Path.GetExtension(fullPath);
                             var files = Directory.GetFiles(dir, $"{fileName}*{ext}");
-                            var best = files.OrderByDescending(f => f.Contains("targetsize-48"))
-                                           .ThenByDescending(f => f.Contains("scale-200"))
+                            var best = files.OrderByDescending(f =>
+                                                f.Contains(BenchmarkSemantics.IconLocation.MrtPreferredTargetSizeToken, StringComparison.OrdinalIgnoreCase))
+                                           .ThenByDescending(f =>
+                                                f.Contains(BenchmarkSemantics.IconLocation.MrtPreferredScaleToken, StringComparison.OrdinalIgnoreCase))
                                            .FirstOrDefault();
                             if (best != null) return best;
                         }
@@ -88,7 +91,11 @@ namespace ContextMenuProfiler.UI.Converters
         {
             string? path = value as string;
             
-            if (string.IsNullOrEmpty(path) || path == "NONE") return DependencyProperty.UnsetValue;
+            if (string.IsNullOrEmpty(path)
+                || string.Equals(path, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return DependencyProperty.UnsetValue;
+            }
 
             if (_iconCache.TryGetValue(path, out var cached)) return cached;
 
@@ -112,7 +119,7 @@ namespace ContextMenuProfiler.UI.Converters
             try
             {
                 // Handle ms-appx:// URIs (UWP resources)
-                if (path.StartsWith("ms-appx://"))
+                if (path.StartsWith(BenchmarkSemantics.IconLocation.MsAppxUriPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     var resolvedPath = ResolveMsAppxUri(path);
                     if (string.IsNullOrEmpty(resolvedPath)) return null;
@@ -123,9 +130,9 @@ namespace ContextMenuProfiler.UI.Converters
                 path = Environment.ExpandEnvironmentVariables(path);
                 
                 // Handle MUI / UWP Resource strings (starts with @)
-                if (path.StartsWith("@"))
+                if (path.StartsWith(BenchmarkSemantics.IconLocation.IndirectStringPrefix, StringComparison.Ordinal))
                 {
-                    StringBuilder sb = new StringBuilder(1024);
+                    StringBuilder sb = new StringBuilder(BenchmarkSemantics.IconLocation.IndirectStringBufferSize);
                     int res = SHLoadIndirectString(path, sb, (uint)sb.Capacity, IntPtr.Zero);
                     if (res == 0) // S_OK
                     {
@@ -143,7 +150,7 @@ namespace ContextMenuProfiler.UI.Converters
                     else
                     {
                         // Remove @ prefix and try parsing as normal path
-                        path = path.Substring(1);
+                        path = path.Substring(BenchmarkSemantics.IconLocation.IndirectStringPrefix.Length);
                     }
                 }
 
@@ -151,7 +158,7 @@ namespace ContextMenuProfiler.UI.Converters
                 string filePath = path;
 
                 // Parse resource index (path,index or path,-id)
-                int commaIndex = path.LastIndexOf(',');
+                int commaIndex = path.LastIndexOf(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator);
                 if (commaIndex > 0)
                 {
                     string indexStr = path.Substring(commaIndex + 1);
@@ -176,7 +183,9 @@ namespace ContextMenuProfiler.UI.Converters
                 {
                     string ext = Path.GetExtension(filePath).ToLower();
                     
-                    if (ext == ".png" || ext == ".jpg" || ext == ".bmp")
+                    if (ext == BenchmarkSemantics.IconFileExtension.Png
+                        || ext == BenchmarkSemantics.IconFileExtension.Jpg
+                        || ext == BenchmarkSemantics.IconFileExtension.Bmp)
                     {
                         var bitmap = new BitmapImage();
                         bitmap.BeginInit();

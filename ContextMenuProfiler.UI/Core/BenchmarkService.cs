@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -17,8 +18,8 @@ namespace ContextMenuProfiler.UI.Core
     {
         public string Name { get; set; } = "";
         public Guid? Clsid { get; set; }
-        public string Status { get; set; } = "Unknown";
-        public string Type { get; set; } = "COM"; // Legacy COM, UWP, Static
+        public BenchmarkStatus Status { get; set; } = BenchmarkSemantics.Status.Unknown;
+        public string Type { get; set; } = BenchmarkSemantics.Type.Com; // Legacy COM, UWP, Static
         public string? Path { get; set; }
         public List<RegistryHandlerInfo> RegistryEntries { get; set; } = new List<RegistryHandlerInfo>();
         public long TotalTime { get; set; }
@@ -43,7 +44,8 @@ namespace ContextMenuProfiler.UI.Core
         public string? FriendlyName { get; set; }
         public string? IconSource { get; set; }
         public string? LocationSummary { get; set; }
-        public string Category { get; set; } = "File";
+        public string Category { get; set; } = BenchmarkSemantics.Category.File;
+        public List<string>? ObservedMenuDisplayNames { get; set; }
     }
 
     internal class ClsidMetadata
@@ -57,235 +59,573 @@ namespace ContextMenuProfiler.UI.Core
     public class BenchmarkService
     {
         private static readonly bool SkipKnownUnstableHandlers =
-            string.Equals(Environment.GetEnvironmentVariable("CMP_SKIP_UNSTABLE_HANDLERS"), "1", StringComparison.OrdinalIgnoreCase);
-
-        private static readonly string[] KnownUnstableHandlerTokens =
-        {
-            "PintoStartScreen",
-            "NvcplDesktopContext",
-            "NvAppDesktopContext",
-            "NVIDIA CPL Context Menu Extension"
-        };
+            BenchmarkSemantics.IsSkipUnstableHandlersEnabled();
 
         public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode = ScanMode.Targeted)
         {
-            // Use Task.Run to avoid deadlocks on UI thread when waiting for async tasks
             return Task.Run(() => RunSystemBenchmarkAsync(mode)).GetAwaiter().GetResult();
+        }
+
+        public List<BenchmarkResult> RunSystemBenchmark(ScanMode mode, string? scanId)
+        {
+            return Task.Run(() => RunSystemBenchmarkAsync(mode, null, scanId)).GetAwaiter().GetResult();
         }
 
         public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode = ScanMode.Targeted, IProgress<BenchmarkResult>? progress = null)
         {
-            var allResults = new ConcurrentBag<BenchmarkResult>();
-            var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
-            var semaphore = new SemaphoreSlim(8);
-            
-            using (var fileContext = ShellTestContext.Create(false))
-            {
-                // 1. Scan All Registry Handlers (COM)
-                var registryHandlers = RegistryScanner.ScanHandlers(mode);
-                var comTasks = registryHandlers.Select(async clsidEntry =>
+            return await RunSystemBenchmarkAsync(mode, progress, null);
+        }
+
+        public async Task<List<BenchmarkResult>> RunSystemBenchmarkAsync(ScanMode mode, IProgress<BenchmarkResult>? progress, string? scanId)
+        {
+            using var fileContext = ShellTestContext.Create(false);
+            var scanSw = Stopwatch.StartNew();
+
+            var registryHandlers = RegistryScanner.ScanHandlers(mode);
+            var staticVerbs = RegistryScanner.ScanStaticVerbs();
+
+            LogService.Instance.InfoEvent(
+                "scan.registry_scan_completed",
+                fields: new Dictionary<string, object?>
                 {
-                    await semaphore.WaitAsync();
-                    try
-                    {
-                        var clsid = clsidEntry.Key;
-                        var handlerInfos = clsidEntry.Value;
-                        
-                        if (resultsMap.ContainsKey(clsid)) return;
-                        var meta = QueryClsidMetadata(clsid);
-                        var result = new BenchmarkResult
-                        {
-                            Clsid = clsid,
-                            Type = "COM",
-                            RegistryEntries = handlerInfos.ToList(),
-                            Name = meta.Name,
-                            BinaryPath = meta.BinaryPath,
-                            ThreadingModel = meta.ThreadingModel,
-                            FriendlyName = meta.FriendlyName
-                        };
-
-                        if (string.IsNullOrEmpty(result.Name)) result.Name = $"Unknown ({clsid})";
-                        
-                        resultsMap[clsid] = result;
-                        result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
-
-                        await EnrichBenchmarkResultAsync(result, fileContext.Path);
-
-                        bool isBlocked = ExtensionManager.IsExtensionBlocked(clsid);
-                        bool hasDisabledPath = result.RegistryEntries.Any(e => e.Location.Contains("[Disabled]"));
-                        result.IsEnabled = !isBlocked && !hasDisabledPath;
-                        result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
-
-                        allResults.Add(result);
-                        progress?.Report(result);
-                    }
-                    finally { semaphore.Release(); }
+                    ["scan_id"] = scanId,
+                    ["scan_scope"] = "system",
+                    ["scan_depth"] = ResolveScanDepth(mode),
+                    ["scan_mode"] = ResolveScanDepth(mode),
+                    ["scope"] = "system",
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count
                 });
 
-                await Task.WhenAll(comTasks);
+            var results = await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, null, fileContext.Path, progress, scanId);
+            scanSw.Stop();
 
-                // 2. Scan Static Verbs
-                var staticVerbs = RegistryScanner.ScanStaticVerbs();
-                foreach (var verbEntry in staticVerbs)
+            LogService.Instance.InfoEvent(
+                "scan.service_completed",
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "system", ResolveScanDepth(mode)));
+
+            return results;
+        }
+
+        public List<BenchmarkResult> RunBenchmark(string targetPath, string? scanId)
+        {
+            return Task.Run(() => RunBenchmarkAsync(targetPath, null, scanId)).GetAwaiter().GetResult();
+        }
+
+        public List<BenchmarkResult> RunBenchmark(string targetPath)
+        {
+            return Task.Run(() => RunBenchmarkAsync(targetPath)).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<BenchmarkResult>> RunBenchmarkAsync(string targetPath, IProgress<BenchmarkResult>? progress = null)
+        {
+            return await RunBenchmarkAsync(targetPath, progress, null);
+        }
+
+        public async Task<List<BenchmarkResult>> RunBenchmarkAsync(string targetPath, IProgress<BenchmarkResult>? progress, string? scanId)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                LogService.Instance.Warning("RunBenchmarkAsync received an empty target path; returning no results.");
+                return new List<BenchmarkResult>();
+            }
+
+            var scanSw = Stopwatch.StartNew();
+
+            var registryHandlers = RegistryScanner.ScanHandlersForPath(targetPath);
+            var staticVerbs = RegistryScanner.ScanStaticVerbsForPath(targetPath);
+
+            LogService.Instance.InfoEvent(
+                "scan.registry_scan_completed",
+                fields: new Dictionary<string, object?>
                 {
-                    string key = verbEntry.Key;
-                    var paths = verbEntry.Value;
-                    string name = key.Split('|')[0];
-                    string command = key.Split('|')[1];
+                    ["scan_id"] = scanId,
+                    ["scan_scope"] = "file",
+                    ["scan_depth"] = "targeted",
+                    ["scan_mode"] = "targeted",
+                    ["scope"] = "file",
+                    ["target_path"] = targetPath,
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count
+                });
 
-                    var verbResult = new BenchmarkResult
+            var results = await RunBenchmarkCoreAsync(registryHandlers, staticVerbs, targetPath, targetPath, progress, scanId);
+            scanSw.Stop();
+
+            LogService.Instance.InfoEvent(
+                "scan.service_completed",
+                fields: BuildSummaryFields(results, scanSw.ElapsedMilliseconds, scanId, "file", "targeted", targetPath));
+
+            return results;
+        }
+
+        private async Task<List<BenchmarkResult>> RunBenchmarkCoreAsync(
+            Dictionary<Guid, List<RegistryHandlerInfo>> registryHandlers,
+            Dictionary<string, List<string>> staticVerbs,
+            string? packageTargetPath,
+            string hookContextPath,
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
+        {
+            var coreSw = Stopwatch.StartNew();
+            var allResults = new ConcurrentBag<BenchmarkResult>();
+            var resultsMap = new ConcurrentDictionary<Guid, BenchmarkResult>();
+            var semaphore = new SemaphoreSlim(BenchmarkSemantics.Runtime.MaxParallelProbeTasks);
+
+            LogService.Instance.InfoEvent(
+                "scan.benchmark_core_started",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["com_handler_count"] = registryHandlers.Count,
+                    ["static_verb_group_count"] = staticVerbs.Count,
+                    ["has_package_target"] = !string.IsNullOrWhiteSpace(packageTargetPath)
+                });
+
+            var phaseSw = Stopwatch.StartNew();
+            await ProcessComHandlersAsync(registryHandlers, hookContextPath, allResults, resultsMap, semaphore, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "com_handlers",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            phaseSw.Restart();
+            ProcessStaticVerbEntries(staticVerbs, allResults, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "static_verbs",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            phaseSw.Restart();
+            await ProcessPackagedExtensionsAsync(packageTargetPath, hookContextPath, allResults, resultsMap, semaphore, progress, scanId);
+            phaseSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.phase_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["phase"] = "packaged_extensions",
+                    ["duration_ms"] = phaseSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            coreSw.Stop();
+            LogService.Instance.InfoEvent(
+                "scan.benchmark_core_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = scanId,
+                    ["duration_ms"] = coreSw.ElapsedMilliseconds,
+                    ["result_count"] = allResults.Count
+                });
+
+            return allResults.ToList();
+        }
+
+        private async Task ProcessComHandlersAsync(
+            Dictionary<Guid, List<RegistryHandlerInfo>> registryHandlers,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
+            SemaphoreSlim semaphore,
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
+        {
+            var comTasks = registryHandlers.Select(clsidEntry =>
+                RunWithSemaphoreAsync(semaphore, async () =>
+                {
+                    var clsid = clsidEntry.Key;
+                    var handlerInfos = clsidEntry.Value;
+                    var meta = QueryClsidMetadata(clsid);
+                    var result = new BenchmarkResult
                     {
-                        Name = name,
-                        Type = "Static",
-                        Status = "Static (Not Measured)",
-                        BinaryPath = ExtractExecutablePath(command),
-                        RegistryEntries = paths.Select(p => new RegistryHandlerInfo { 
-                            Path = p, 
-                            Location = $"Registry (Shell) - {p.Split('\\')[0]}" 
-                        }).ToList(),
-                        InterfaceType = "Static Verb",
-                        DetailedStatus = "Static shell verbs do not go through Hook COM probing and are displayed as not measured.",
-                        TotalTime = 0,
-                        Category = "Static"
+                        Clsid = clsid,
+                        Type = BenchmarkSemantics.Type.Com,
+                        RegistryEntries = handlerInfos.ToList(),
+                        Name = meta.Name,
+                        BinaryPath = meta.BinaryPath,
+                        ThreadingModel = meta.ThreadingModel,
+                        FriendlyName = meta.FriendlyName
                     };
 
-                    bool anyDisabled = paths.Any(p => p.Split('\\').Last().StartsWith("-"));
-                    verbResult.IsEnabled = !anyDisabled;
-                    verbResult.LocationSummary = string.Join(", ", verbResult.RegistryEntries.Select(e => e.Location).Distinct());
-                    verbResult.IconLocation = ResolveStaticVerbIcon(paths.First(), verbResult.BinaryPath);
+                    if (string.IsNullOrEmpty(result.Name))
+                    {
+                        result.Name = string.Format(
+                            LocalizationService.Instance["Dashboard.Value.UnknownWithClsid"],
+                            clsid);
+                    }
 
-                    allResults.Add(verbResult);
-                    progress?.Report(verbResult);
+                    if (!resultsMap.TryAdd(clsid, result))
+                    {
+                        return;
+                    }
+
+                    result.Category = DetermineCategory(result.RegistryEntries.Select(e => e.Location));
+                    await ProcessMeasuredResultAsync(result, hookContextPath, allResults, progress, scanId);
+                }));
+
+            await Task.WhenAll(comTasks);
+        }
+
+        private void ProcessStaticVerbEntries(
+            Dictionary<string, List<string>> staticVerbs,
+            ConcurrentBag<BenchmarkResult> allResults,
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
+        {
+            foreach (var verbEntry in staticVerbs)
+            {
+                var verbResult = CreateStaticVerbResult(verbEntry.Key, verbEntry.Value);
+                if (verbResult == null)
+                {
+                    continue;
                 }
 
-                // 3. Scan UWP Extensions (Parallelized)
-                var uwpTasks = PackageScanner.ScanPackagedExtensions(null)
-                    .Where(r => r.Clsid.HasValue && !resultsMap.ContainsKey(r.Clsid.Value))
-                    .Select(async uwpResult => 
-                    {
-                        await semaphore.WaitAsync();
-                        try 
-                        {
-                            uwpResult.Category = "UWP";
-                            await EnrichBenchmarkResultAsync(uwpResult, fileContext.Path);
-                            
-                            uwpResult.IsEnabled = !ExtensionManager.IsExtensionBlocked(uwpResult.Clsid!.Value);
-                            uwpResult.LocationSummary = "Modern Shell (UWP)";
-                            
-                            allResults.Add(uwpResult);
-                            progress?.Report(uwpResult);
-                        }
-                        finally { semaphore.Release(); }
-                    });
-
-                await Task.WhenAll(uwpTasks);
-
-                return allResults.ToList();
+                AddAndReportResult(allResults, verbResult, progress);
+                LogService.Instance.InfoEvent(
+                    "scan.item_processed",
+                    fields: BuildItemFields(verbResult, scanId, "static"));
             }
         }
 
-        private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath)
+        private async Task ProcessPackagedExtensionsAsync(
+            string? packageTargetPath,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            ConcurrentDictionary<Guid, BenchmarkResult> resultsMap,
+            SemaphoreSlim semaphore,
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
+        {
+            var uwpTasks = PackageScanner.ScanPackagedExtensions(packageTargetPath)
+                .Where(r => r.Clsid.HasValue)
+                .Select(uwpResult =>
+                    RunWithSemaphoreAsync(semaphore, async () =>
+                    {
+                        if (!resultsMap.TryAdd(uwpResult.Clsid!.Value, uwpResult))
+                        {
+                            return;
+                        }
+
+                        uwpResult.Category = BenchmarkSemantics.Category.Uwp;
+                        await ProcessMeasuredResultAsync(uwpResult, hookContextPath, allResults, progress, scanId);
+                    }));
+
+            await Task.WhenAll(uwpTasks);
+        }
+
+        private static async Task RunWithSemaphoreAsync(SemaphoreSlim semaphore, Func<Task> action)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                await action();
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+
+        private static void AddAndReportResult(
+            ConcurrentBag<BenchmarkResult> allResults,
+            BenchmarkResult result,
+            IProgress<BenchmarkResult>? progress)
+        {
+            allResults.Add(result);
+            progress?.Report(result);
+        }
+
+        private async Task ProcessMeasuredResultAsync(
+            BenchmarkResult result,
+            string hookContextPath,
+            ConcurrentBag<BenchmarkResult> allResults,
+            IProgress<BenchmarkResult>? progress,
+            string? scanId)
+        {
+            await EnrichBenchmarkResultAsync(result, hookContextPath, scanId);
+            result.IsEnabled = ResolveEnabledState(result);
+            result.LocationSummary = ResolveLocationSummary(result);
+            AddAndReportResult(allResults, result, progress);
+
+            LogService.Instance.InfoEvent(
+                "scan.item_processed",
+                fields: BuildItemFields(result, scanId, "measured"));
+        }
+
+        private static bool ResolveEnabledState(BenchmarkResult result)
+        {
+            bool isBlocked = result.Clsid.HasValue && ExtensionManager.IsExtensionBlocked(result.Clsid.Value);
+            if (isBlocked)
+            {
+                return false;
+            }
+
+            if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
+            {
+                return !result.RegistryEntries.Any(e => BenchmarkSemantics.IsDisabledRegistryLocation(e.Location));
+            }
+
+            return true;
+        }
+
+        private static string ResolveLocationSummary(BenchmarkResult result)
+        {
+            if (BenchmarkSemantics.IsPackagedExtensionType(result.Type))
+            {
+                return BenchmarkSemantics.LocationSummary.ModernShellUwp;
+            }
+
+            return string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
+        }
+
+        private BenchmarkResult? CreateStaticVerbResult(string key, List<string> paths)
+        {
+            if (!BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command))
+            {
+                LogService.Instance.Warning($"Skip malformed static verb entry key: '{key}'");
+                return null;
+            }
+
+            var result = new BenchmarkResult
+            {
+                Name = name,
+                Type = BenchmarkSemantics.Type.Static,
+                Status = BenchmarkSemantics.Status.StaticNotMeasured,
+                BinaryPath = ExtractExecutablePath(command),
+                RegistryEntries = paths.Select(p => new RegistryHandlerInfo
+                {
+                    Path = p,
+                    Location = BenchmarkSemantics.BuildStaticVerbRegistryLocation(p)
+                }).ToList(),
+                InterfaceType = BenchmarkSemantics.InterfaceType.StaticVerb,
+                DetailedStatus = LocalizationService.Instance["Dashboard.Detail.StaticNotMeasured"],
+                TotalTime = 0,
+                Category = BenchmarkSemantics.Category.Static
+            };
+
+            result.IsEnabled = !paths.Any(BenchmarkSemantics.IsStaticVerbRegistryPathDisabled);
+            result.LocationSummary = string.Join(", ", result.RegistryEntries.Select(e => e.Location).Distinct());
+            result.IconLocation = ResolveStaticVerbIcon(paths.First(), result.BinaryPath);
+            return result;
+        }
+
+        private async Task EnrichBenchmarkResultAsync(BenchmarkResult result, string contextPath, string? scanId)
         {
             if (!result.Clsid.HasValue) return;
 
             if (SkipKnownUnstableHandlers && IsKnownUnstableHandler(result))
             {
-                result.Status = "Skipped (Known Unstable)";
-                result.DetailedStatus = "Skipped Hook invocation for a known unstable system handler to avoid scan-wide IPC stalls.";
-                result.InterfaceType = "Skipped";
-                result.CreateTime = 0;
-                result.InitTime = 0;
-                result.QueryTime = 0;
-                result.TotalTime = 0;
+                MarkAsSkippedKnownUnstable(result);
                 return;
             }
 
             // Check for Orphaned / Missing DLL
             if (!string.IsNullOrEmpty(result.BinaryPath) && !File.Exists(result.BinaryPath))
             {
-                result.Status = "Orphaned / Missing DLL";
-                result.DetailedStatus = $"The file '{result.BinaryPath}' was not found on disk. This extension is likely corrupted or uninstalled.";
+                result.Status = BenchmarkSemantics.Status.OrphanedMissingDll;
+                result.DetailedStatus = string.Format(
+                    LocalizationService.Instance["Dashboard.Detail.OrphanedMissingDll"],
+                    result.BinaryPath);
             }
 
-            var hookCall = await HookIpcClient.GetHookDataAsync(result.Clsid.Value.ToString("B"), contextPath, result.BinaryPath);
+            var hookCall = await HookIpcClient.GetHookDataAsync(result.Clsid.Value.ToString("B"), contextPath, result.BinaryPath, scanId);
             var hookData = hookCall.data;
             result.WallClockTime = hookCall.total_ms;
             result.LockWaitTime = hookCall.lock_wait_ms;
             result.ConnectTime = hookCall.connect_ms;
             result.IpcRoundTripTime = hookCall.roundtrip_ms;
 
-            if (hookData != null && hookData.success)
+            if (hookData?.success == true)
             {
-                result.InterfaceType = hookData.@interface;
-                if (!string.IsNullOrEmpty(hookData.names))
-                {
-                    // Keep packaged/UWP display names stable to avoid garbled menu-title replacements.
-                    if (!string.Equals(result.Type, "UWP", StringComparison.OrdinalIgnoreCase))
-                    {
-                        result.Name = hookData.names.Replace("|", ", ");
-                    }
-                    if (result.Status == "Unknown") result.Status = "Verified via Hook";
-                }
-                else if (result.Status == "Unknown" || result.Status == "OK")
-                {
-                    result.Status = "Hook Loaded (No Menu)";
-                    result.DetailedStatus = "The extension was loaded by the Hook service but it did not provide any context menu items for the test context.";
-                }
-                
-                string? winnerIcon = null;
-                if (!string.IsNullOrEmpty(hookData.reg_icon) && (hookData.reg_icon.Contains(",") || hookData.reg_icon.ToLower().EndsWith(".ico")))
-                    winnerIcon = hookData.reg_icon;
-                if (winnerIcon == null && !string.IsNullOrEmpty(hookData.icons))
-                    winnerIcon = hookData.icons.Split('|').FirstOrDefault(i => !string.IsNullOrEmpty(i) && i != "NONE");
-                
-                if (winnerIcon != null) result.IconLocation = winnerIcon;
-                
-                result.CreateTime = (long)hookData.create_ms;
-                result.InitTime = (long)hookData.init_ms;
-                result.QueryTime = (long)hookData.query_ms;
-                result.TotalTime = result.CreateTime + result.InitTime + result.QueryTime;
+                ApplyHookSuccessResult(result, hookData);
             }
-            else if (hookData != null && !hookData.success)
+            else if (hookData != null)
             {
-                if (!string.IsNullOrEmpty(hookData.error) && hookData.error.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
-                {
-                    result.Status = "IPC Timeout";
-                    result.DetailedStatus = $"Hook service timed out while probing this extension. Error: {hookData.error}";
-                }
-                else
-                {
-                    result.Status = "Load Error";
-                    result.DetailedStatus = $"The Hook service failed to load this extension. Error: {hookData.error ?? "Unknown Error"}";
-                }
+                ApplyHookErrorResult(result, hookData);
             }
-            else if (hookData == null)
+            else
             {
-                if (result.Status != "Load Error" && result.Status != "Orphaned / Missing DLL")
-                {
-                    if (hookCall.roundtrip_ms >= 1900)
-                    {
-                        result.Status = "IPC Timeout";
-                        result.DetailedStatus = "Hook service response timed out for this extension. Data is based on registry scan only.";
-                    }
-                    else
-                    {
-                        result.Status = "Registry Fallback";
-                        result.DetailedStatus = "The Hook service could not be reached or failed to process this extension. Data is based on registry scan only.";
-                    }
-                }
+                ApplyHookUnavailableFallback(result, hookCall.roundtrip_ms, hookCall.ipc_error);
             }
         }
 
-        private static bool IsKnownUnstableHandler(BenchmarkResult result)
+        private static void MarkAsSkippedKnownUnstable(BenchmarkResult result)
         {
-            if (!string.IsNullOrWhiteSpace(result.Name) &&
-                KnownUnstableHandlerTokens.Any(token => result.Name.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            result.Status = BenchmarkSemantics.Status.SkippedKnownUnstable;
+            result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.SkippedKnownUnstable"];
+            result.InterfaceType = BenchmarkSemantics.InterfaceType.Skipped;
+            result.CreateTime = 0;
+            result.InitTime = 0;
+            result.QueryTime = 0;
+            result.TotalTime = 0;
+        }
+
+        private static void ApplyHookSuccessResult(BenchmarkResult result, HookResponse hookData)
+        {
+            result.InterfaceType = hookData.@interface;
+            if (!string.IsNullOrEmpty(hookData.names))
+            {
+                result.ObservedMenuDisplayNames = ParseHookMenuDisplayNames(hookData.names);
+
+                if (BenchmarkSemantics.IsRegistryManagedExtensionType(result.Type))
+                {
+                    result.Name = string.Join(
+                        ", ",
+                        result.ObservedMenuDisplayNames);
+                }
+
+                if (result.Status == BenchmarkSemantics.Status.Unknown)
+                {
+                    result.Status = BenchmarkSemantics.Status.VerifiedViaHook;
+                }
+            }
+            else if (result.Status == BenchmarkSemantics.Status.Unknown || result.Status == BenchmarkSemantics.Status.Ok)
+            {
+                result.Status = BenchmarkSemantics.Status.HookLoadedNoMenu;
+                result.DetailedStatus = LocalizationService.Instance["Dashboard.Detail.HookLoadedNoMenu"];
+            }
+
+            string? winnerIcon = ResolveHookIconLocation(hookData);
+            if (winnerIcon != null)
+            {
+                result.IconLocation = winnerIcon;
+            }
+
+            result.CreateTime = (long)hookData.create_ms;
+            result.InitTime = (long)hookData.init_ms;
+            result.QueryTime = (long)hookData.query_ms;
+            result.TotalTime = result.CreateTime + result.InitTime + result.QueryTime;
+        }
+
+        private static List<string> ParseHookMenuDisplayNames(string names)
+        {
+            return names
+                .Split(HookIpcSemantics.Response.MultiValueDelimiter)
+                .Select(n => n.Trim())
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static string? ResolveHookIconLocation(HookResponse hookData)
+        {
+            if (!string.IsNullOrEmpty(hookData.reg_icon)
+                && (hookData.reg_icon.Contains(BenchmarkSemantics.IconLocation.IconResourceIndexSeparator)
+                    || hookData.reg_icon.EndsWith(BenchmarkSemantics.IconFileExtension.Ico, StringComparison.OrdinalIgnoreCase)))
+            {
+                return hookData.reg_icon;
+            }
+
+            if (string.IsNullOrEmpty(hookData.icons))
+            {
+                return null;
+            }
+
+            return hookData.icons
+                .Split(HookIpcSemantics.Response.MultiValueDelimiter)
+                .FirstOrDefault(i =>
+                    !string.IsNullOrEmpty(i)
+                    && !string.Equals(i, HookIpcSemantics.Response.NoIconToken, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void ApplyHookErrorResult(BenchmarkResult result, HookResponse hookData)
+        {
+            string hookError = BuildHookErrorDetails(hookData.error, hookData.code);
+
+            if (IsTimeoutLikeHookFailure(hookData))
+            {
+                result.Status = BenchmarkSemantics.Status.IpcTimeout;
+                result.DetailedStatus = string.Format(
+                    LocalizationService.Instance["Dashboard.Detail.HookProbeTimeoutWithError"],
+                    hookError);
+                return;
+            }
+
+            result.Status = BenchmarkSemantics.Status.LoadError;
+            result.DetailedStatus = string.Format(
+                LocalizationService.Instance["Dashboard.Detail.HookLoadErrorWithError"],
+                hookError);
+        }
+
+        private static void ApplyHookUnavailableFallback(BenchmarkResult result, long roundTripMs, string? ipcError)
+        {
+            if (result.Status == BenchmarkSemantics.Status.LoadError || result.Status == BenchmarkSemantics.Status.OrphanedMissingDll)
+            {
+                return;
+            }
+
+            if (roundTripMs >= BenchmarkSemantics.Runtime.IpcTimeoutLikeRoundtripThresholdMs)
+            {
+                result.Status = BenchmarkSemantics.Status.IpcTimeout;
+                result.DetailedStatus = AttachIpcReason(
+                    LocalizationService.Instance["Dashboard.Detail.HookResponseTimeoutFallback"],
+                    ipcError);
+                return;
+            }
+
+            result.Status = BenchmarkSemantics.Status.RegistryFallback;
+            result.DetailedStatus = AttachIpcReason(
+                LocalizationService.Instance["Dashboard.Detail.HookUnavailableFallback"],
+                ipcError);
+        }
+
+        private static bool IsTimeoutLikeHookFailure(HookResponse hookData)
+        {
+            if (string.Equals(hookData.code, "E_TIMEOUT", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hookData.code, "E_REQ_HEADER", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hookData.code, "E_REQ_READ", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(result.FriendlyName) &&
-                KnownUnstableHandlerTokens.Any(token => result.FriendlyName.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            return BenchmarkSemantics.IsTimeoutLikeError(hookData.error);
+        }
+
+        private static string BuildHookErrorDetails(string? error, string? code)
+        {
+            string resolvedError = string.IsNullOrWhiteSpace(error)
+                ? LocalizationService.Instance["Dashboard.Value.Unknown"]
+                : error;
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return resolvedError;
+            }
+
+            return $"{code}: {resolvedError}";
+        }
+
+        private static string AttachIpcReason(string detail, string? ipcError)
+        {
+            if (string.IsNullOrWhiteSpace(ipcError))
+            {
+                return detail;
+            }
+
+            return $"{detail} ({ipcError})";
+        }
+
+        private static bool IsKnownUnstableHandler(BenchmarkResult result)
+        {
+            if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(result.Name))
+            {
+                return true;
+            }
+
+            if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(result.FriendlyName))
             {
                 return true;
             }
@@ -294,10 +634,8 @@ namespace ContextMenuProfiler.UI.Core
             {
                 foreach (var entry in result.RegistryEntries)
                 {
-                    if ((!string.IsNullOrWhiteSpace(entry.Location) &&
-                         KnownUnstableHandlerTokens.Any(token => entry.Location.Contains(token, StringComparison.OrdinalIgnoreCase))) ||
-                        (!string.IsNullOrWhiteSpace(entry.Path) &&
-                         KnownUnstableHandlerTokens.Any(token => entry.Path.Contains(token, StringComparison.OrdinalIgnoreCase))))
+                    if (BenchmarkSemantics.ContainsKnownUnstableHandlerToken(entry.Location)
+                        || BenchmarkSemantics.ContainsKnownUnstableHandlerToken(entry.Path))
                     {
                         return true;
                     }
@@ -309,92 +647,129 @@ namespace ContextMenuProfiler.UI.Core
 
         private ClsidMetadata QueryClsidMetadata(Guid clsid, int depth = 0)
         {
-            var meta = new ClsidMetadata();
-            string clsidB = clsid.ToString("B");
-
-            // Prevent infinite recursion or too deep nesting
-            if (depth >= 3) return meta;
-
-            using (var key = ShellUtils.OpenClsidKey(clsidB))
+            if (depth >= 3)
             {
-                if (key != null)
-                {
-                    meta.Name = key.GetValue("") as string ?? "";
-                    meta.FriendlyName = key.GetValue("FriendlyName") as string ?? "";
-
-                    // Try InprocServer32
-                    using (var serverKey = key.OpenSubKey("InprocServer32"))
-                    {
-                        if (serverKey != null)
-                        {
-                            meta.BinaryPath = serverKey.GetValue("") as string ?? "";
-                            meta.ThreadingModel = serverKey.GetValue("ThreadingModel") as string ?? "";
-                        }
-                    }
-
-                    // If no path, check TreatAs (Alias)
-                    if (string.IsNullOrEmpty(meta.BinaryPath))
-                    {
-                        string? treatAs = key.OpenSubKey("TreatAs")?.GetValue("") as string;
-                        if (!string.IsNullOrEmpty(treatAs) && Guid.TryParse(treatAs, out Guid otherGuid) && otherGuid != clsid)
-                        {
-                            var otherMeta = QueryClsidMetadata(otherGuid, depth + 1);
-                            if (string.IsNullOrEmpty(meta.Name)) meta.Name = otherMeta.Name;
-                            meta.BinaryPath = otherMeta.BinaryPath;
-                            meta.ThreadingModel = otherMeta.ThreadingModel;
-                        }
-                    }
-
-                    // If still no path, check AppID (Surrogates)
-                    if (string.IsNullOrEmpty(meta.BinaryPath))
-                    {
-                        string? appId = key.GetValue("AppID") as string;
-                        if (!string.IsNullOrEmpty(appId))
-                        {
-                            using (var appKey = Registry.ClassesRoot.OpenSubKey($@"AppID\{appId}"))
-                            {
-                                string? dllSurrogate = appKey?.GetValue("DllSurrogate") as string;
-                                meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate) 
-                                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "dllhost.exe")
-                                    : (dllSurrogate ?? "");
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Check Packaged COM
-                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\ClassIndex\{clsidB}"))
-                    {
-                        string? packageFullName = pkgKey?.GetValue("") as string;
-                        if (!string.IsNullOrEmpty(packageFullName))
-                        {
-                            meta.BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "";
-                            meta.Name = QueryPackagedDisplayName(clsidB) ?? "";
-                        }
-                    }
-                }
+                return new ClsidMetadata();
             }
 
-            meta.Name = ShellUtils.ResolveMuiString(meta.Name);
-            if (string.IsNullOrEmpty(meta.Name) && !string.IsNullOrEmpty(meta.BinaryPath))
-                meta.Name = Path.GetFileName(meta.BinaryPath);
+            string clsidB = clsid.ToString("B");
+            var meta = TryQueryRegisteredClsidMetadata(clsid, clsidB, depth)
+                ?? TryQueryPackagedClsidMetadata(clsid, clsidB)
+                ?? new ClsidMetadata();
+
+            return NormalizeClsidMetadata(meta);
+        }
+
+        private ClsidMetadata? TryQueryRegisteredClsidMetadata(Guid clsid, string clsidB, int depth)
+        {
+            using var key = ShellUtils.OpenClsidKey(clsidB);
+            if (key == null)
+            {
+                return null;
+            }
+
+            var meta = new ClsidMetadata();
+            meta.Name = key.GetValue("") as string ?? "";
+            meta.FriendlyName = key.GetValue(ComRegistrySemantics.FriendlyNameValueName) as string ?? "";
+            PopulateFromInprocServerKey(key, meta);
+
+            if (string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                PopulateFromTreatAsAlias(clsid, key, meta, depth);
+            }
+
+            if (string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                PopulateFromAppIdSurrogate(key, meta);
+            }
 
             return meta;
+        }
+
+        private ClsidMetadata? TryQueryPackagedClsidMetadata(Guid clsid, string clsidB)
+        {
+            using var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsidB));
+            string? packageFullName = pkgKey?.GetValue("") as string;
+            if (string.IsNullOrEmpty(packageFullName))
+            {
+                return null;
+            }
+
+            return new ClsidMetadata
+            {
+                BinaryPath = ResolvePackageDllPath(packageFullName, clsid) ?? "",
+                Name = QueryPackagedDisplayName(clsidB) ?? ""
+            };
+        }
+
+        private static ClsidMetadata NormalizeClsidMetadata(ClsidMetadata meta)
+        {
+            meta.Name = ShellUtils.ResolveMuiString(meta.Name);
+            if (string.IsNullOrEmpty(meta.Name) && !string.IsNullOrEmpty(meta.BinaryPath))
+            {
+                meta.Name = Path.GetFileName(meta.BinaryPath);
+            }
+
+            return meta;
+        }
+
+        private static void PopulateFromInprocServerKey(RegistryKey clsidKey, ClsidMetadata meta)
+        {
+            using var serverKey = clsidKey.OpenSubKey(ComRegistrySemantics.InprocServer32SubKeyName);
+            if (serverKey == null)
+            {
+                return;
+            }
+
+            meta.BinaryPath = serverKey.GetValue("") as string ?? "";
+            meta.ThreadingModel = serverKey.GetValue(ComRegistrySemantics.ThreadingModelValueName) as string ?? "";
+        }
+
+        private void PopulateFromTreatAsAlias(Guid originalClsid, RegistryKey clsidKey, ClsidMetadata meta, int depth)
+        {
+            string? treatAs = clsidKey.OpenSubKey(ComRegistrySemantics.TreatAsSubKeyName)?.GetValue("") as string;
+            if (string.IsNullOrEmpty(treatAs) || !Guid.TryParse(treatAs, out Guid otherGuid) || otherGuid == originalClsid)
+            {
+                return;
+            }
+
+            var otherMeta = QueryClsidMetadata(otherGuid, depth + 1);
+            if (string.IsNullOrEmpty(meta.Name))
+            {
+                meta.Name = otherMeta.Name;
+            }
+
+            meta.BinaryPath = otherMeta.BinaryPath;
+            meta.ThreadingModel = otherMeta.ThreadingModel;
+        }
+
+        private static void PopulateFromAppIdSurrogate(RegistryKey clsidKey, ClsidMetadata meta)
+        {
+            string? appId = clsidKey.GetValue(ComRegistrySemantics.AppIdValueName) as string;
+            if (string.IsNullOrEmpty(appId))
+            {
+                return;
+            }
+
+            using var appKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildAppIdPath(appId));
+            string? dllSurrogate = appKey?.GetValue(ComRegistrySemantics.DllSurrogateValueName) as string;
+            meta.BinaryPath = dllSurrogate != null && string.IsNullOrEmpty(dllSurrogate)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), ComRegistrySemantics.DllHostExecutableName)
+                : (dllSurrogate ?? "");
         }
 
         private string? QueryPackagedDisplayName(string clsidB)
         {
             try
             {
-                using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\Package"))
+                using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.PackagedComPackagePrefix))
                 {
                     if (pkgKey == null) return null;
                     foreach (var pkgName in pkgKey.GetSubKeyNames())
                     {
-                        using (var clsKey = pkgKey.OpenSubKey($@"{pkgName}\Class\{clsidB}"))
+                        using (var clsKey = pkgKey.OpenSubKey(ComRegistrySemantics.BuildPackagedComPackageClassPath(pkgName, clsidB)))
                         {
-                            string? name = clsKey?.GetValue("DisplayName") as string;
+                            string? name = clsKey?.GetValue(ComRegistrySemantics.DisplayNameValueName) as string;
                             if (!string.IsNullOrEmpty(name)) return name;
                         }
                     }
@@ -432,7 +807,7 @@ namespace ContextMenuProfiler.UI.Core
             {
                 using (var key = Registry.ClassesRoot.OpenSubKey(regPath))
                 {
-                    string? icon = key?.GetValue("Icon") as string;
+                    string? icon = key?.GetValue(BenchmarkSemantics.StaticVerb.IconValueName) as string;
                     if (!string.IsNullOrEmpty(icon)) return icon;
                 }
             }
@@ -448,15 +823,15 @@ namespace ContextMenuProfiler.UI.Core
             try
             {
                 // Look up package installation path
-                using (var key = Registry.ClassesRoot.OpenSubKey($@"Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\PackageRepository\Packages\{packageFullName}"))
+                using (var key = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackageRepositoryPath(packageFullName)))
                 {
-                    string? installPath = key?.GetValue("Path") as string;
+                    string? installPath = key?.GetValue(ComRegistrySemantics.PackageInstallPathValueName) as string;
                     if (string.IsNullOrEmpty(installPath)) return null;
 
                     // Now find the relative DLL path from PackagedCom\Package
                     // We need the short name (Package Family Name or part of full name)
-                    string packageId = packageFullName.Split('_')[0];
-                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\Package"))
+                    string packageId = ComRegistrySemantics.ExtractPackageIdPrefix(packageFullName);
+                    using (var pkgKey = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.PackagedComPackagePrefix))
                     {
                         if (pkgKey != null)
                         {
@@ -464,9 +839,9 @@ namespace ContextMenuProfiler.UI.Core
                             {
                                 if (name.StartsWith(packageId, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    using (var clsKey = pkgKey.OpenSubKey($@"{name}\Class\{clsid:B}"))
+                                    using (var clsKey = pkgKey.OpenSubKey(ComRegistrySemantics.BuildPackagedComPackageClassPath(name, clsid.ToString("B"))))
                                     {
-                                        string? relDllPath = clsKey?.GetValue("DllPath") as string;
+                                        string? relDllPath = clsKey?.GetValue(ComRegistrySemantics.DllPathValueName) as string;
                                         if (!string.IsNullOrEmpty(relDllPath))
                                         {
                                             return Path.Combine(installPath, relDllPath);
@@ -486,22 +861,70 @@ namespace ContextMenuProfiler.UI.Core
             }
         }
 
-        public List<BenchmarkResult> RunBenchmark(string targetPath)
-        {
-            return RunSystemBenchmark(ScanMode.Targeted); // Simplified for now
-        }
-
-        public long RunRealShellBenchmark(string? filePath = null) => -1;
+        public long RunRealShellBenchmark(string? filePath = null)
+            => BenchmarkSemantics.Runtime.RealShellBenchmarkUnsupportedMs;
 
         private string DetermineCategory(IEnumerable<string> locations)
         {
-            var locs = locations.ToList();
-            if (locs.Any(l => l.Contains("Background"))) return "Background";
-            if (locs.Any(l => l.Contains("Drive"))) return "Drive";
-            if (locs.Any(l => l.Contains("Directory") || l.Contains("Folder"))) return "Folder";
-            if (locs.Any(l => l.Contains("All Files") || l.Contains("Extension") || l.Contains("All File System Objects"))) return "File";
-            
-            return "File"; // Default
+            return BenchmarkSemantics.ResolveCategoryFromLocations(locations);
+        }
+
+        private static Dictionary<string, object?> BuildSummaryFields(
+            List<BenchmarkResult> results,
+            long durationMs,
+            string? scanId,
+            string scanScope,
+            string scanDepth,
+            string? targetPath = null)
+        {
+            int measuredCount = results.Count(r => r.TotalTime > 0);
+            int fallbackCount = results.Count(r => BenchmarkSemantics.IsFallbackLikeStatus(r.Status));
+
+            return new Dictionary<string, object?>
+            {
+                ["scan_id"] = scanId,
+                ["scan_scope"] = scanScope,
+                ["scan_depth"] = scanDepth,
+                ["scan_mode"] = scanDepth,
+                ["scope"] = scanScope,
+                ["target_path"] = targetPath,
+                ["duration_ms"] = durationMs,
+                ["result_count"] = results.Count,
+                ["measured_count"] = measuredCount,
+                ["fallback_count"] = fallbackCount
+            };
+        }
+
+        private static string ResolveScanDepth(ScanMode mode)
+        {
+            return mode == ScanMode.Full ? "full" : "targeted";
+        }
+
+        private static Dictionary<string, object?> BuildItemFields(BenchmarkResult result, string? scanId, string source)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["scan_id"] = scanId,
+                ["source"] = source,
+                ["clsid"] = result.Clsid?.ToString("B"),
+                ["name"] = result.Name,
+                ["friendly_name"] = string.IsNullOrWhiteSpace(result.FriendlyName) ? null : result.FriendlyName,
+                ["observed_menu_display_names"] = result.ObservedMenuDisplayNames,
+                ["observed_menu_display_name_count"] = result.ObservedMenuDisplayNames?.Count ?? 0,
+                ["type"] = result.Type,
+                ["status"] = result.Status,
+                ["total_ms"] = result.TotalTime,
+                ["create_ms"] = result.CreateTime,
+                ["init_ms"] = result.InitTime,
+                ["query_ms"] = result.QueryTime,
+                ["wall_clock_ms"] = result.WallClockTime,
+                ["lock_wait_ms"] = result.LockWaitTime,
+                ["connect_ms"] = result.ConnectTime,
+                ["roundtrip_ms"] = result.IpcRoundTripTime,
+                ["is_enabled"] = result.IsEnabled,
+                ["category"] = result.Category,
+                ["registry_entry_count"] = result.RegistryEntries?.Count ?? 0
+            };
         }
     }
 }

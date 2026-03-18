@@ -6,6 +6,7 @@ using ContextMenuProfiler.UI.Core.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -31,10 +32,21 @@ namespace ContextMenuProfiler.UI.ViewModels
         private bool _isActive;
     }
 
-    public partial class DashboardViewModel : ObservableObject
+    public partial class DashboardViewModel : ObservableObject, IDisposable
     {
+        private enum LastScanMode
+        {
+            None,
+            System,
+            File
+        }
+
         private readonly BenchmarkService _benchmarkService;
+        private readonly PropertyChangedEventHandler _localizationChangedHandler;
+        private readonly PropertyChangedEventHandler _hookServiceChangedHandler;
         private CancellationTokenSource? _filterCts;
+        private bool _disposed;
+        private string? _currentScanId;
 
         [ObservableProperty]
         private ObservableCollection<BenchmarkResult> _displayResults = new();
@@ -56,7 +68,7 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _selectedCategory = "All";
+        private string _selectedCategory = BenchmarkSemantics.FilterCategory.All;
 
         [ObservableProperty]
         private int _selectedCategoryIndex = 0;
@@ -76,8 +88,14 @@ namespace ContextMenuProfiler.UI.ViewModels
 
         private async Task ApplyFilterAsync()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             // Cancel previous filter task
             _filterCts?.Cancel();
+            _filterCts?.Dispose();
             _filterCts = new CancellationTokenSource();
             var token = _filterCts.Token;
 
@@ -100,7 +118,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                     return query.ToList().OrderBy(r => r, new ComparisonComparer<BenchmarkResult>(comparer)).ToList();
                 }, token);
 
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested || _disposed) return;
 
                 // 2. Clear current display
                 DisplayResults.Clear();
@@ -131,7 +149,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
 
             // Category Match
-            bool categoryMatch = SelectedCategory == "All" || result.Category == SelectedCategory;
+            bool categoryMatch = BenchmarkSemantics.IsCategoryMatch(SelectedCategory, result.Category);
             if (!categoryMatch) return false;
 
             // Search Match
@@ -192,9 +210,9 @@ namespace ContextMenuProfiler.UI.ViewModels
         }
 
         [ObservableProperty]
-        private string _realLoadTime = "N/A"; // Display string for Real Shell Benchmark
+        private string _realLoadTime = LocalizationService.Instance["Dashboard.Value.None"]; // Display string for Real Shell Benchmark
 
-        private string _lastScanMode = "None"; // "System" or "File"
+        private LastScanMode _lastScanMode = LastScanMode.None;
         private string _lastScanPath = "";
         private long _scanOrderCounter = 0;
 
@@ -222,73 +240,98 @@ namespace ContextMenuProfiler.UI.ViewModels
             _benchmarkService = new BenchmarkService();
             // Removed sync ScanResultsView setup
 
+            _localizationChangedHandler = OnLocalizationChanged;
+            _hookServiceChangedHandler = OnHookServicePropertyChanged;
+
             // Initialize categories
             ApplyLocalizedCategoryNames();
-            LocalizationService.Instance.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == "Item[]")
-                {
-                    ApplyLocalizedCategoryNames();
-                    OnPropertyChanged(nameof(CurrentHookStatus));
-                    OnPropertyChanged(nameof(HookStatusMessage));
-                    if (!IsBusy)
-                    {
-                        StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
-                    }
-                }
-            };
+            LocalizationService.Instance.PropertyChanged += _localizationChangedHandler;
 
             // Observe Hook status changes to update command availability
-            HookService.Instance.PropertyChanged += (s, e) => {
-                if (e.PropertyName == nameof(HookService.CurrentStatus))
-                {
-                    App.Current.Dispatcher.Invoke(() => {
-                        OnPropertyChanged(nameof(CurrentHookStatus));
-                        OnPropertyChanged(nameof(HookStatusMessage));
-                        ScanSystemCommand.NotifyCanExecuteChanged();
-                        PickAndScanFileCommand.NotifyCanExecuteChanged();
-                        RefreshCommand.NotifyCanExecuteChanged();
-                    });
-                }
-            };
+            HookService.Instance.PropertyChanged += _hookServiceChangedHandler;
 
             // 启动后自动尝试注入
             _ = AutoEnsureHook();
         }
 
+        private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (e.PropertyName == "Item[]")
+            {
+                ApplyLocalizedCategoryNames();
+                OnPropertyChanged(nameof(CurrentHookStatus));
+                OnPropertyChanged(nameof(HookStatusMessage));
+                if (!IsBusy)
+                {
+                    StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
+                }
+            }
+        }
+
+        private void OnHookServicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (e.PropertyName == nameof(HookService.CurrentStatus))
+            {
+                App.Current.Dispatcher.Invoke(() =>
+                {
+                    OnPropertyChanged(nameof(CurrentHookStatus));
+                    OnPropertyChanged(nameof(HookStatusMessage));
+                    ScanSystemCommand.NotifyCanExecuteChanged();
+                    PickAndScanFileCommand.NotifyCanExecuteChanged();
+                    RefreshCommand.NotifyCanExecuteChanged();
+                });
+            }
+        }
+
         [RelayCommand]
         private async Task ReconnectHook()
         {
-            StatusText = "Reconnecting Hook...";
+            StatusText = LocalizationService.Instance["Dashboard.Status.ReconnectingHook"];
             IsBusy = true;
             try
             {
                 bool injectOk = await HookService.Instance.InjectAsync();
                 if (!injectOk)
                 {
-                    NotificationService.Instance.ShowError("Inject Failed", "Injector or Hook DLL not found, or elevation was denied.");
+                    NotificationService.Instance.ShowError(
+                        LocalizationService.Instance["Dashboard.Notify.InjectFailed.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.InjectFailed.Message"]);
                     return;
                 }
-                await Task.Delay(1000); // Give it a second
+                await Task.Delay(BenchmarkSemantics.Runtime.HookReconnectStabilizationDelayMs);
                 await HookService.Instance.GetStatusAsync();
                 if (CurrentHookStatus == HookStatus.Active)
                 {
-                    NotificationService.Instance.ShowSuccess("Connected", "Hook service is now active.");
+                    NotificationService.Instance.ShowSuccess(
+                        LocalizationService.Instance["Dashboard.Notify.HookConnected.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.HookConnected.Message"]);
                 }
                 else
                 {
-                    NotificationService.Instance.ShowWarning("Partial Success", "DLL injected, but pipe not responding yet.");
+                    NotificationService.Instance.ShowWarning(
+                        LocalizationService.Instance["Dashboard.Notify.HookPartial.Title"],
+                        LocalizationService.Instance["Dashboard.Notify.HookPartial.Message"]);
                 }
             }
             catch (Exception ex)
             {
                 LogService.Instance.Error("Reconnect Failed", ex);
-                NotificationService.Instance.ShowError("Reconnect Failed", ex.Message);
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ReconnectFailed.Title"], ex.Message);
             }
             finally
             {
                 IsBusy = false;
-                StatusText = "Ready";
+                StatusText = LocalizationService.Instance["Dashboard.Status.Ready"];
             }
         }
 
@@ -297,7 +340,7 @@ namespace ContextMenuProfiler.UI.ViewModels
             var status = await HookService.Instance.GetStatusAsync();
             if (status == HookStatus.Disconnected)
             {
-                StatusText = "Initializing Hook Service...";
+                StatusText = LocalizationService.Instance["Dashboard.Status.InitializingHook"];
                 await HookService.Instance.InjectAsync();
             }
         }
@@ -310,11 +353,11 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand(CanExecute = nameof(CanExecuteBenchmark))]
         private async Task Refresh()
         {
-            if (_lastScanMode == "System")
+            if (_lastScanMode == LastScanMode.System)
             {
                 await ScanSystem();
             }
-            else if (_lastScanMode == "File" && !string.IsNullOrEmpty(_lastScanPath))
+            else if (_lastScanMode == LastScanMode.File && !string.IsNullOrEmpty(_lastScanPath))
             {
                 await ScanFile(_lastScanPath);
             }
@@ -323,17 +366,9 @@ namespace ContextMenuProfiler.UI.ViewModels
         [RelayCommand(CanExecute = nameof(CanExecuteBenchmark))]
         private async Task ScanSystem()
         {
-            _lastScanMode = "System";
-            StatusText = LocalizationService.Instance["Dashboard.Status.ScanningSystem"];
-            IsBusy = true;
-            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
-            
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                _scanOrderCounter = 0;
-                Results.Clear();
-                DisplayResults.Clear();
-            });
+            BeginScanSession(
+                LastScanMode.System,
+                LocalizationService.Instance["Dashboard.Status.ScanningSystem"]);
             
             try
             {
@@ -371,7 +406,7 @@ namespace ContextMenuProfiler.UI.ViewModels
                 });
 
                 var mode = UseDeepScan ? ScanMode.Full : ScanMode.Targeted;
-                await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction)));
+                await Task.Run(async () => await _benchmarkService.RunSystemBenchmarkAsync(mode, new Progress<BenchmarkResult>(progressAction), _currentScanId));
                 producerCompleted = true;
                 TryCompleteUiDrain();
                 await uiDrainTcs.Task;
@@ -379,14 +414,11 @@ namespace ContextMenuProfiler.UI.ViewModels
                 // Ensure summary values are refreshed even if no progress callback was emitted.
                 UpdateStats();
 
-                StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], Results.Count);
-                NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], Results.Count));
+                NotifyScanComplete(Results.Count);
             }
             catch (Exception ex)
             {
-                LogService.Instance.Error("Scan System Failed", ex);
-                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
-                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
+                HandleScanFailure("Scan System Failed", ex, setRealLoadError: false);
             }
             finally
             {
@@ -438,36 +470,14 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
-            _lastScanMode = "File";
-            _lastScanPath = filePath;
-            StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath);
-            IsBusy = true;
-            _scanOrderCounter = 0;
-            Results.Clear();
-            DisplayResults.Clear(); // Clear display
-            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
+            BeginScanSession(
+                LastScanMode.File,
+                string.Format(LocalizationService.Instance["Dashboard.Status.ScanningFile"], filePath),
+                filePath);
 
             try
             {
-                var results = await Task.Run(() =>
-                {
-                    List<BenchmarkResult>? threadResult = null;
-                    var thread = new Thread(() =>
-                    {
-                        try
-                        {
-                            threadResult = _benchmarkService.RunBenchmark(filePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogService.Instance.Error("Background File Scan Error", ex);
-                        }
-                    });
-                    thread.SetApartmentState(ApartmentState.STA);
-                    thread.Start();
-                    thread.Join();
-                    return threadResult ?? new List<BenchmarkResult>();
-                });
+                var results = await RunFileBenchmarkInStaAsync(filePath);
 
                 if (results.Count > 0)
                 {
@@ -477,17 +487,13 @@ namespace ContextMenuProfiler.UI.ViewModels
                         InsertSorted(res);
                     }
                     UpdateStats();
-                    StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], results.Count);
-                    NotificationService.Instance.ShowSuccess(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"], string.Format(LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"], results.Count, System.IO.Path.GetFileName(filePath)));
+                    NotifyScanComplete(results.Count, filePath);
                 }
 
             }
             catch (Exception ex)
             {
-                StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
-                LogService.Instance.Error("File Scan Failed", ex);
-                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
-                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
+                HandleScanFailure("File Scan Failed", ex, setRealLoadError: true);
             }
             finally
             {
@@ -495,21 +501,163 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
         }
 
+        private void NotifyScanComplete(int resultCount, string? filePath = null)
+        {
+            StatusText = string.Format(LocalizationService.Instance["Dashboard.Status.ScanComplete"], resultCount);
+
+            LogService.Instance.InfoEvent(
+                "scan.session_completed",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_scope"] = ResolveScanScope(_lastScanMode),
+                    ["scan_depth"] = ResolveScanDepth(_lastScanMode),
+                    ["scan_mode"] = ResolveScanDepth(_lastScanMode),
+                    ["target_path"] = filePath,
+                    ["result_count"] = resultCount,
+                    ["display_result_count"] = DisplayResults.Count,
+                    ["total_load_ms"] = TotalLoadTime,
+                    ["active_extensions"] = ActiveExtensions
+                });
+
+            string message = string.IsNullOrEmpty(filePath)
+                ? string.Format(LocalizationService.Instance["Dashboard.Notify.ScanComplete.Message"], resultCount)
+                : string.Format(
+                    LocalizationService.Instance["Dashboard.Notify.ScanCompleteForFile.Message"],
+                    resultCount,
+                    System.IO.Path.GetFileName(filePath));
+
+            NotificationService.Instance.ShowSuccess(
+                LocalizationService.Instance["Dashboard.Notify.ScanComplete.Title"],
+                message);
+        }
+
+        private void HandleScanFailure(string logMessage, Exception ex, bool setRealLoadError)
+        {
+            LogService.Instance.ErrorEvent(
+                "scan.session_failed",
+                message: logMessage,
+                ex: ex,
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_scope"] = ResolveScanScope(_lastScanMode),
+                    ["scan_depth"] = ResolveScanDepth(_lastScanMode),
+                    ["scan_mode"] = ResolveScanDepth(_lastScanMode),
+                    ["target_path"] = _lastScanPath
+                });
+            StatusText = LocalizationService.Instance["Dashboard.Status.ScanFailed"];
+            NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ScanFailed.Title"], ex.Message);
+
+            if (setRealLoadError)
+            {
+                RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Error"];
+            }
+        }
+
+        private void BeginScanSession(LastScanMode mode, string scanningStatusText, string scanPath = "")
+        {
+            _lastScanMode = mode;
+            _lastScanPath = scanPath;
+            _currentScanId = Guid.NewGuid().ToString("N");
+            StatusText = scanningStatusText;
+            IsBusy = true;
+            RealLoadTime = LocalizationService.Instance["Dashboard.RealLoad.Measuring"];
+
+            LogService.Instance.InfoEvent(
+                "scan.session_started",
+                fields: new Dictionary<string, object?>
+                {
+                    ["scan_id"] = _currentScanId,
+                    ["scan_scope"] = ResolveScanScope(mode),
+                    ["scan_depth"] = ResolveScanDepth(mode),
+                    ["scan_mode"] = ResolveScanDepth(mode),
+                    ["scan_path"] = scanPath,
+                    ["deep_scan"] = UseDeepScan,
+                    ["hook_status"] = HookService.Instance.CurrentStatus
+                });
+
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                _scanOrderCounter = 0;
+                Results.Clear();
+                DisplayResults.Clear();
+            });
+        }
+
+        private async Task<List<BenchmarkResult>> RunFileBenchmarkInStaAsync(string filePath)
+        {
+            return await Task.Run(() =>
+            {
+                List<BenchmarkResult>? threadResult = null;
+                var thread = new Thread(() =>
+                {
+                    try
+                    {
+                        threadResult = _benchmarkService.RunBenchmark(filePath, _currentScanId);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogService.Instance.Error("Background File Scan Error", ex);
+                    }
+                });
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return threadResult ?? new List<BenchmarkResult>();
+            });
+        }
+
+        private string ResolveScanScope(LastScanMode mode)
+        {
+            return mode == LastScanMode.File ? "file" : "system";
+        }
+
+        private string ResolveScanDepth(LastScanMode mode)
+        {
+            if (mode == LastScanMode.File)
+            {
+                return "targeted";
+            }
+
+            return UseDeepScan ? "full" : "targeted";
+        }
+
         private void ApplyLocalizedCategoryNames()
         {
             Categories = new ObservableCollection<CategoryItem>
             {
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = "All", Icon = SymbolRegular.TableMultiple20, IsActive = true },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = "File", Icon = SymbolRegular.Document20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = "Folder", Icon = SymbolRegular.Folder20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = "Background", Icon = SymbolRegular.Image20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = "Drive", Icon = SymbolRegular.HardDrive20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = "UWP", Icon = SymbolRegular.Box20 },
-                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = "Static", Icon = SymbolRegular.PuzzlePiece20 }
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.All"], Tag = BenchmarkSemantics.FilterCategory.All, Icon = SymbolRegular.TableMultiple20, IsActive = true },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Files"], Tag = BenchmarkSemantics.Category.File, Icon = SymbolRegular.Document20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Folders"], Tag = BenchmarkSemantics.Category.Folder, Icon = SymbolRegular.Folder20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Background"], Tag = BenchmarkSemantics.Category.Background, Icon = SymbolRegular.Image20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.Drives"], Tag = BenchmarkSemantics.Category.Drive, Icon = SymbolRegular.HardDrive20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.UwpModern"], Tag = BenchmarkSemantics.Category.Uwp, Icon = SymbolRegular.Box20 },
+                new CategoryItem { Name = LocalizationService.Instance["Dashboard.Category.StaticVerbs"], Tag = BenchmarkSemantics.Category.Static, Icon = SymbolRegular.PuzzlePiece20 }
             };
             if (SelectedCategoryIndex < 0 || SelectedCategoryIndex >= Categories.Count)
             {
                 SelectedCategoryIndex = 0;
+            }
+        }
+
+        private static void ApplyRegistryExtensionState(BenchmarkResult item, bool shouldEnable)
+        {
+            if (item.RegistryEntries == null || item.RegistryEntries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in item.RegistryEntries)
+            {
+                if (shouldEnable)
+                {
+                    ExtensionManager.EnableRegistryKey(entry.Path);
+                }
+                else
+                {
+                    ExtensionManager.DisableRegistryKey(entry.Path);
+                }
             }
         }
         
@@ -524,47 +672,27 @@ namespace ContextMenuProfiler.UI.ViewModels
                 // When this command is executed (e.g. by Click), the property might already be updated or not.
                 // We rely on the Command execution.
                 
-                bool newState = item.IsEnabled; 
-                
-                if (!newState) // User turned it OFF (IsEnabled is now false)
+                bool shouldEnable = item.IsEnabled;
+
+                if (BenchmarkSemantics.IsPackagedExtensionType(item.Type) && item.Clsid.HasValue)
                 {
-                    // Logic to Disable
-                    if ((item.Type == "UWP" || item.Type == "Packaged Extension" || item.Type == "Packaged COM") && item.Clsid.HasValue)
-                    {
-                        ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, true);
-                    }
-                    else if (item.RegistryEntries != null && item.RegistryEntries.Count > 0)
-                    {
-                        foreach (var entry in item.RegistryEntries)
-                        {
-                            ExtensionManager.DisableRegistryKey(entry.Path);
-                        }
-                    }
-                    item.Status = "Disabled (Pending Restart)";
+                    ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, !shouldEnable);
                 }
-                else // User turned it ON (IsEnabled is now true)
+                else
                 {
-                    // Logic to Enable
-                    if ((item.Type == "UWP" || item.Type == "Packaged Extension" || item.Type == "Packaged COM") && item.Clsid.HasValue)
-                    {
-                        ExtensionManager.SetExtensionBlockStatus(item.Clsid.Value, item.Name, false);
-                    }
-                    else if (item.RegistryEntries != null && item.RegistryEntries.Count > 0)
-                    {
-                        foreach (var entry in item.RegistryEntries)
-                        {
-                            ExtensionManager.EnableRegistryKey(entry.Path);
-                        }
-                    }
-                    item.Status = "Enabled (Pending Restart)";
+                    ApplyRegistryExtensionState(item, shouldEnable);
                 }
+
+                item.Status = shouldEnable
+                    ? BenchmarkSemantics.Status.EnabledPendingRestart
+                    : BenchmarkSemantics.Status.DisabledPendingRestart;
                 
                 UpdateStats();
              }
              catch (Exception ex)
              {
                  LogService.Instance.Error("Toggle Extension Failed", ex);
-                 NotificationService.Instance.ShowError("Toggle Failed", ex.Message);
+                 NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.ToggleFailed.Title"], ex.Message);
                  // Revert
                  item.IsEnabled = !item.IsEnabled;
              }
@@ -575,16 +703,18 @@ namespace ContextMenuProfiler.UI.ViewModels
         {
             if (item == null) return;
             
-            if (item.Type == "UWP")
+            if (BenchmarkSemantics.IsPackagedExtensionType(item.Type))
             {
-                NotificationService.Instance.ShowWarning("Not Supported", "Deleting UWP extensions is not supported. Use Disable instead.");
+                NotificationService.Instance.ShowWarning(
+                    LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.DeleteNotSupported.Message"]);
                 return;
             }
 
             // Confirm
             var result = System.Windows.MessageBox.Show(
-                $"Are you sure you want to permanently delete the extension '{item.Name}'?\n\nThis action will remove the registry keys and cannot be undone.", 
-                "Confirm Delete", 
+                string.Format(LocalizationService.Instance["Dashboard.Dialog.ConfirmDelete.Message"], item.Name),
+                LocalizationService.Instance["Dashboard.Dialog.ConfirmDelete.Title"],
                 System.Windows.MessageBoxButton.YesNo, 
                 System.Windows.MessageBoxImage.Warning);
                 
@@ -605,12 +735,14 @@ namespace ContextMenuProfiler.UI.ViewModels
                 DisplayResults.Remove(item);
                 UpdateStats();
                 
-                NotificationService.Instance.ShowSuccess("Deleted", $"Extension '{item.Name}' has been deleted.");
+                NotificationService.Instance.ShowSuccess(
+                    LocalizationService.Instance["Dashboard.Notify.DeleteSuccess.Title"],
+                    string.Format(LocalizationService.Instance["Dashboard.Notify.DeleteSuccess.Message"], item.Name));
             }
             catch (Exception ex)
             {
                 LogService.Instance.Error("Delete Extension Failed", ex);
-                NotificationService.Instance.ShowError("Delete Failed", ex.Message);
+                NotificationService.Instance.ShowError(LocalizationService.Instance["Dashboard.Notify.DeleteFailed.Title"], ex.Message);
             }
         }
 
@@ -620,18 +752,21 @@ namespace ContextMenuProfiler.UI.ViewModels
             if (item?.Clsid != null)
             {
                 string clsid = item.Clsid.Value.ToString("B");
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < BenchmarkSemantics.Runtime.ClipboardRetryAttempts; i++)
                 {
                     try
                     {
                         Clipboard.SetText(clsid);
-                        NotificationService.Instance.ShowSuccess("Copied", "CLSID copied to clipboard.");
+                        NotificationService.Instance.ShowSuccess(
+                            LocalizationService.Instance["Dashboard.Notify.CopySuccess.Title"],
+                            LocalizationService.Instance["Dashboard.Notify.CopySuccess.Message"]);
                         return;
                     }
-                    catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.ErrorCode == 0x800401D0)
+                    catch (System.Runtime.InteropServices.COMException ex)
+                        when ((uint)ex.ErrorCode == BenchmarkSemantics.Runtime.ClipboardCantOpenHResult)
                     {
                         // CLIPBRD_E_CANT_OPEN - Wait and retry
-                        await Task.Delay(100);
+                        await Task.Delay(BenchmarkSemantics.Runtime.ClipboardRetryDelayMs);
                     }
                     catch (Exception ex)
                     {
@@ -639,7 +774,9 @@ namespace ContextMenuProfiler.UI.ViewModels
                         break;
                     }
                 }
-                NotificationService.Instance.ShowError("Copy Failed", "Clipboard is locked by another process.");
+                NotificationService.Instance.ShowError(
+                    LocalizationService.Instance["Dashboard.Notify.CopyFailed.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.CopyFailed.Message"]);
             }
         }
 
@@ -650,10 +787,11 @@ namespace ContextMenuProfiler.UI.ViewModels
             
             try
             {
-                // Registry path might need translation from HKCR to HKLM/HKCU
-                string fullPath = path;
-                if (path.StartsWith("*\\")) fullPath = "HKEY_CLASSES_ROOT\\" + path;
-                else if (!path.Contains("HKEY_")) fullPath = "HKEY_CLASSES_ROOT\\" + path;
+                string fullPath = RegistryPathHelper.NormalizeForRegedit(path);
+                if (string.IsNullOrEmpty(fullPath))
+                {
+                    return;
+                }
 
                 using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Applets\Regedit"))
                 {
@@ -669,46 +807,43 @@ namespace ContextMenuProfiler.UI.ViewModels
             }
             catch (Exception)
             {
-                NotificationService.Instance.ShowError("Error", "Failed to open registry editor.");
+                NotificationService.Instance.ShowError(
+                    LocalizationService.Instance["Dashboard.Notify.OpenRegistryFailed.Title"],
+                    LocalizationService.Instance["Dashboard.Notify.OpenRegistryFailed.Message"]);
             }
         }
 
         private void UpdateStats()
         {
-            // Simple optimization: only recalculate if results actually changed
-            // and use a single pass where possible
-            TotalExtensions = Results.Count;
-            
-            int disabledCount = 0;
-            long totalTime = 0;
-            long activeTime = 0;
-            long disabledTime = 0;
+            var stats = BenchmarkStatisticsCalculator.Calculate(Results);
 
-            foreach (var r in Results)
+            TotalExtensions = stats.TotalExtensions;
+            DisabledExtensions = stats.DisabledExtensions;
+            ActiveExtensions = stats.ActiveExtensions;
+            TotalLoadTime = stats.TotalLoadTime;
+            ActiveLoadTime = stats.ActiveLoadTime;
+            DisabledLoadTime = stats.DisabledLoadTime;
+            RealLoadTime = stats.RealLoadTimeMs > 0
+                ? $"{stats.RealLoadTimeMs} ms"
+                : LocalizationService.Instance["Dashboard.Value.None"];
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
             {
-                totalTime += r.TotalTime;
-                if (r.IsEnabled)
-                {
-                    activeTime += r.TotalTime;
-                }
-                else
-                {
-                    disabledCount++;
-                    disabledTime += r.TotalTime;
-                }
+                return;
             }
 
-            DisabledExtensions = disabledCount;
-            ActiveExtensions = TotalExtensions - disabledCount;
-            TotalLoadTime = totalTime;
-            ActiveLoadTime = activeTime;
-            DisabledLoadTime = disabledTime;
+            _disposed = true;
+            LocalizationService.Instance.PropertyChanged -= _localizationChangedHandler;
+            HookService.Instance.PropertyChanged -= _hookServiceChangedHandler;
 
-            // "Real load" uses wall-clock IPC time when available; fall back to measured COM stage total.
-            long realLoadMs = Results
-                .Where(r => r.IsEnabled)
-                .Sum(r => r.WallClockTime > 0 ? r.WallClockTime : Math.Max(0, r.TotalTime));
-            RealLoadTime = realLoadMs > 0 ? $"{realLoadMs} ms" : "N/A";
+            _filterCts?.Cancel();
+            _filterCts?.Dispose();
+            _filterCts = null;
+
+            GC.SuppressFinalize(this);
         }
     }
 }

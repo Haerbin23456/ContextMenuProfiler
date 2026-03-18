@@ -79,9 +79,17 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
+if /I "%CMP_SKIP_ROOT_COPY%"=="1" (
+    echo Skipping root binary copy because CMP_SKIP_ROOT_COPY=1
+    echo Build outputs are available in "%BUILD_DIR%"
+    echo Done.
+    exit /b 0
+)
+
 copy /Y "%BUILD_DIR%\ContextMenuProfiler.Hook.dll" "ContextMenuProfiler.Hook.dll" >nul
 if %ERRORLEVEL% NEQ 0 (
     echo Error: Failed to copy ContextMenuProfiler.Hook.dll
+    echo Hint: if this file is locked by Explorer, rerun with CMP_SKIP_ROOT_COPY=1 for validation-only builds.
     exit /b 1
 )
 copy /Y "%BUILD_DIR%\ContextMenuProfiler.Injector.exe" "ContextMenuProfiler.Injector.exe" >nul

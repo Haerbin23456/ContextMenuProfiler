@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
+using ContextMenuProfiler.UI.Core;
+using ContextMenuProfiler.UI.Core.Services;
 
 namespace ContextMenuProfiler.UI.Converters
 {
@@ -8,35 +10,36 @@ namespace ContextMenuProfiler.UI.Converters
     {
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
         {
-            if (values.Length < 2) return "N/A";
+            string noneText = LocalizationService.Instance["Dashboard.Value.None"];
+            if (values.Length < 2) return noneText;
 
             long ms = 0;
             if (values[0] is long l) ms = l;
             if (values[0] is int i) ms = i;
 
-            string status = values[1]?.ToString() ?? string.Empty;
-
-            if (ShouldShowNa(status, ms))
+            if (ShouldShowNa(values[1], ms))
             {
-                return "N/A";
+                return noneText;
             }
 
             return $"{ms} ms";
         }
 
-        private static bool ShouldShowNa(string status, long ms)
+        private static bool ShouldShowNa(object? statusValue, long ms)
         {
             if (ms > 0) return false;
 
-            if (string.IsNullOrWhiteSpace(status)) return true;
+            if (statusValue is BenchmarkStatus status)
+            {
+                return BenchmarkSemantics.IsFallbackLikeStatus(status)
+                    || BenchmarkSemantics.IsNotMeasuredLikeStatus(status);
+            }
 
-            return status.Contains("Fallback", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Load Error", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Orphaned", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("Missing", StringComparison.OrdinalIgnoreCase) ||
-                     status.Contains("Not Measured", StringComparison.OrdinalIgnoreCase) ||
-                     status.Contains("Unsupported", StringComparison.OrdinalIgnoreCase) ||
-                   status.Contains("No Menu", StringComparison.OrdinalIgnoreCase);
+            string statusText = statusValue?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(statusText)) return true;
+
+            return BenchmarkSemantics.IsFallbackLikeStatus(statusText)
+                || BenchmarkSemantics.IsNotMeasuredLikeStatus(statusText);
         }
 
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)

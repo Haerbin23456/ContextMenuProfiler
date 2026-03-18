@@ -11,11 +11,7 @@ namespace ContextMenuProfiler.UI.Core
 {
     public class PackageScanner
     {
-        private static readonly XNamespace NS_DEFAULT = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
-        private static readonly XNamespace NS_UAP = "http://schemas.microsoft.com/appx/manifest/uap/windows10";
-        private static readonly XNamespace NS_DESKTOP4 = "http://schemas.microsoft.com/appx/manifest/desktop/windows10/4";
-        private static readonly XNamespace NS_DESKTOP5 = "http://schemas.microsoft.com/appx/manifest/desktop/windows10/5";
-        private static readonly XNamespace NS_COM = "http://schemas.microsoft.com/appx/manifest/com/windows10";
+        private static readonly XNamespace NS_COM = PackageManifestSemantics.Namespaces.Com;
 
         public static IEnumerable<BenchmarkResult> ScanPackagedExtensions(string? targetPath)
         {
@@ -51,11 +47,11 @@ namespace ContextMenuProfiler.UI.Core
             string? installPath = package.InstalledLocation?.Path;
             if (string.IsNullOrEmpty(installPath)) return;
 
-            string manifestPath = Path.Combine(installPath, "AppxManifest.xml");
+            string manifestPath = Path.Combine(installPath, PackageManifestSemantics.Manifest.FileName);
             if (!File.Exists(manifestPath)) return;
 
             string manifestContent = File.ReadAllText(manifestPath);
-            if (!manifestContent.Contains("fileExplorerContextMenus")) return;    
+            if (!manifestContent.Contains(PackageManifestSemantics.Manifest.ContextMenuCategoryToken)) return;
 
             // Handle Sparse Packages (like VS Code)
             // Deferred: only resolve EffectiveLocation for packages that actually have context menu extensions
@@ -67,8 +63,9 @@ namespace ContextMenuProfiler.UI.Core
             XDocument doc = XDocument.Parse(manifestContent);
             var clsidToPath = MapClsidToBinaryPath(doc, effectivePath);
             
-            var extensions = doc.Descendants().Where(e => e.Name.LocalName == "Extension" && 
-                             e.Attribute("Category")?.Value == "windows.fileExplorerContextMenus");
+            var extensions = doc.Descendants().Where(e =>
+                e.Name.LocalName == PackageManifestSemantics.Manifest.ExtensionElement
+                && e.Attribute(PackageManifestSemantics.Manifest.CategoryAttribute)?.Value == PackageManifestSemantics.Manifest.ContextMenuCategory);
 
             foreach (var extElement in extensions)
             {
@@ -79,16 +76,16 @@ namespace ContextMenuProfiler.UI.Core
         private static void ProcessExtensionElement(Package package, XElement extElement, List<BenchmarkResult> results, 
             Dictionary<Guid, string> clsidToPath, string installPath, string targetExt, bool scanAll)
         {
-            var itemTypes = extElement.Descendants().Where(e => e.Name.LocalName == "ItemType");
+            var itemTypes = extElement.Descendants().Where(e => e.Name.LocalName == PackageManifestSemantics.Manifest.ItemTypeElement);
 
             foreach (var itemType in itemTypes)
             {
-                string? type = itemType.Attribute("Type")?.Value?.ToLower();
+                string? type = itemType.Attribute(PackageManifestSemantics.Manifest.TypeAttribute)?.Value?.ToLowerInvariant();
                 if (string.IsNullOrEmpty(type)) continue;
 
                 if (!scanAll && !IsTypeMatch(type, targetExt)) continue;
 
-                var verbs = itemType.Descendants().Where(e => e.Name.LocalName == "Verb");
+                var verbs = itemType.Descendants().Where(e => e.Name.LocalName == PackageManifestSemantics.Manifest.VerbElement);
                 foreach (var verb in verbs)
                 {
                     if (TryParseVerb(package, verb, clsidToPath, installPath, out var result) && result != null)
@@ -104,13 +101,13 @@ namespace ContextMenuProfiler.UI.Core
             string installPath, out BenchmarkResult? result)
         {
             result = null;
-            string? clsidStr = verb.Attribute("Clsid")?.Value;
+            string? clsidStr = verb.Attribute(PackageManifestSemantics.Manifest.ClsidAttribute)?.Value;
             if (!Guid.TryParse(clsidStr, out Guid clsid)) return false;
 
             string name = package.DisplayName;
             if (string.IsNullOrEmpty(name)) name = package.Id.Name;
             
-            string? verbId = verb.Attribute("Id")?.Value;
+            string? verbId = verb.Attribute(PackageManifestSemantics.Manifest.IdAttribute)?.Value;
             if (!string.IsNullOrEmpty(verbId)) name += $" ({verbId})";
 
             string? logoPath = ResolveBestLogo(package, verb.Document, installPath);
@@ -121,15 +118,19 @@ namespace ContextMenuProfiler.UI.Core
             {
                 Name = name,
                 Clsid = clsid,
-                Status = "OK",
-                Type = "UWP",
+                Status = BenchmarkSemantics.Status.Ok,
+                Type = BenchmarkSemantics.Type.Uwp,
                 Path = package.Id.FullName,
                 BinaryPath = binaryPath,
                 // 简洁且必要：将 DLL 路径作为 Hint 传给 Converter，这是已知事实，不是猜测
-                IconLocation = !string.IsNullOrEmpty(logoPath) ? $"{logoPath}|{binaryPath}" : logoPath,
+                IconLocation = !string.IsNullOrEmpty(logoPath)
+                    ? $"{logoPath}{BenchmarkSemantics.IconLocation.HintSeparator}{binaryPath}"
+                    : logoPath,
                 PackageName = package.Id.Name,
                 Version = $"{package.Id.Version.Major}.{package.Id.Version.Minor}.{package.Id.Version.Build}",
-                IconSource = !string.IsNullOrEmpty(logoPath) ? "Manifest (App Logo)" : "None"
+                IconSource = !string.IsNullOrEmpty(logoPath)
+                    ? BenchmarkSemantics.IconSource.ManifestAppLogo
+                    : null
             };
 
             return true;
@@ -146,33 +147,35 @@ namespace ContextMenuProfiler.UI.Core
                 
                 // 2. 统一返回 ms-appx 协议，让 Converter 的智能逻辑去处理缩放和稀疏包路径
                 // 这是最稳健的做法，因为 Converter 已经具备了处理 scale-xxx 和 EffectiveLocation 的能力
-                return $"ms-appx://{package.Id.Name}/{relativeLogo.TrimStart('\\', '/')}";
+                return $"{BenchmarkSemantics.IconLocation.MsAppxUriPrefix}{package.Id.Name}/{relativeLogo.TrimStart('\\', '/')}";
             }
             catch { return null; }
         }
 
         private static string? ExtractRelativeLogoFromManifest(XDocument doc)
         {
-            var visualElements = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "VisualElements");
+            var visualElements = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == PackageManifestSemantics.Manifest.VisualElementsElement);
             if (visualElements != null)
             {
-                return visualElements.Attribute("Square44x44Logo")?.Value
-                    ?? visualElements.Attribute("Square150x150Logo")?.Value
-                    ?? visualElements.Attribute("Logo")?.Value;
+                return visualElements.Attribute(PackageManifestSemantics.Manifest.Square44LogoAttribute)?.Value
+                    ?? visualElements.Attribute(PackageManifestSemantics.Manifest.Square150LogoAttribute)?.Value
+                    ?? visualElements.Attribute(PackageManifestSemantics.Manifest.LogoElement)?.Value;
             }
 
-            return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Logo")?.Value;
+            return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == PackageManifestSemantics.Manifest.LogoElement)?.Value;
         }
 
         private static Dictionary<Guid, string> MapClsidToBinaryPath(XDocument doc, string installPath)
         {
             var map = new Dictionary<Guid, string>();
-            var classes = doc.Descendants().Where(e => e.Name.LocalName == "Class" && e.Name.Namespace == NS_COM);
+            var classes = doc.Descendants().Where(e =>
+                e.Name.LocalName == PackageManifestSemantics.Manifest.ClassElement
+                && e.Name.Namespace == NS_COM);
 
             foreach (var cls in classes)
             {
-                string? idStr = cls.Attribute("Id")?.Value;
-                string? path = cls.Attribute("Path")?.Value;
+                string? idStr = cls.Attribute(PackageManifestSemantics.Manifest.IdAttribute)?.Value;
+                string? path = cls.Attribute(PackageManifestSemantics.Manifest.PathAttribute)?.Value;
                 if (Guid.TryParse(idStr, out Guid guid) && !string.IsNullOrEmpty(path))
                 {
                     map[guid] = path;
@@ -199,24 +202,31 @@ namespace ContextMenuProfiler.UI.Core
 
         private static string DetermineTargetExtension(string? path)
         {
-            if (path == null) return "";
-            if (Directory.Exists(path)) return "directory";
-            return Path.GetExtension(path).ToLower();
+            if (path == null) return string.Empty;
+            if (Directory.Exists(path)) return BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType;
+            return Path.GetExtension(path).ToLowerInvariant();
         }
 
         private static bool IsTypeMatch(string type, string targetExt)
         {
-            if (type == "*") return true;
-            if (type == "directory" || type == "folder") return targetExt == "directory";
-            if (type == "directory\\background") return targetExt == "directory";
-            return type == targetExt;
+            if (string.Equals(type, BenchmarkSemantics.RegistryPathPattern.AnyAssociationType, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (BenchmarkSemantics.RegistryPathPattern.IsDirectoryLikeAssociationType(type))
+            {
+                return string.Equals(targetExt, BenchmarkSemantics.RegistryPathPattern.DirectoryAssociationType, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return string.Equals(type, targetExt, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string? GetPackageNameForClsid(Guid clsid)
         {
             try
             {
-                using var key = Registry.ClassesRoot.OpenSubKey($@"PackagedCom\ClassIndex\{clsid:B}");
+                using var key = Registry.ClassesRoot.OpenSubKey(ComRegistrySemantics.BuildPackagedComClassIndexPath(clsid.ToString("B")));
                 return key?.GetValue("") as string;
             }
             catch { return null; }
