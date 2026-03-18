@@ -146,7 +146,7 @@ namespace ContextMenuProfiler.UI.Core
                 string key = verbEntry.Key;
                 var paths = verbEntry.Value;
 
-                if (!TryParseStaticVerbKey(key, out string name, out string command))
+                if (!BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command))
                 {
                     LogService.Instance.Warning($"Skip malformed static verb entry key: '{key}'");
                     continue;
@@ -515,27 +515,6 @@ namespace ContextMenuProfiler.UI.Core
         }
 
         public long RunRealShellBenchmark(string? filePath = null) => -1;
-
-        private static bool TryParseStaticVerbKey(string key, out string name, out string command)
-        {
-            name = string.Empty;
-            command = string.Empty;
-
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                return false;
-            }
-
-            int separatorIndex = key.IndexOf('|');
-            if (separatorIndex <= 0 || separatorIndex >= key.Length - 1)
-            {
-                return false;
-            }
-
-            name = key.Substring(0, separatorIndex);
-            command = key.Substring(separatorIndex + 1);
-            return true;
-        }
 
         private string DetermineCategory(IEnumerable<string> locations)
         {

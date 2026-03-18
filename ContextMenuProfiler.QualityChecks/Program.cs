@@ -214,11 +214,24 @@ AssertTrue(
 );
 
 AssertTrue(
+    benchmarkSemanticsSource.Contains("public static class StaticVerb", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("UniqueKeySeparator = '|'", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool IsIgnoredStaticVerbName", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static string BuildStaticVerbUniqueKey", StringComparison.Ordinal)
+    && benchmarkSemanticsSource.Contains("public static bool TryParseStaticVerbUniqueKey", StringComparison.Ordinal),
+    "BenchmarkSemanticsDefinesStaticVerbKeyHelpers"
+);
+
+AssertTrue(
     registryScannerSource.Contains("BenchmarkSemantics.RegistryLocationLabel.AllFiles", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildDisabledRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildExtensionRegistryLocationLabel", StringComparison.Ordinal)
     && registryScannerSource.Contains("BenchmarkSemantics.BuildProgIdRegistryLocationLabel", StringComparison.Ordinal)
-    && registryScannerSource.Contains("BenchmarkSemantics.BuildRegistryHandlerLocation", StringComparison.Ordinal),
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildRegistryHandlerLocation", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.CommandSubKeyName", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.StaticVerb.MuiVerbValueName", StringComparison.Ordinal)
+    && registryScannerSource.Contains("BenchmarkSemantics.BuildStaticVerbUniqueKey(displayName, command)", StringComparison.Ordinal),
     "RegistryScannerUsesSemanticLocationBuilders"
 );
 
@@ -226,7 +239,9 @@ AssertTrue(
     !registryScannerSource.Contains("\"All Files (*)\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"Directory [Disabled]\"", StringComparison.Ordinal)
     && !registryScannerSource.Contains("\"Extension (", StringComparison.Ordinal)
-    && !registryScannerSource.Contains("\"ProgID (", StringComparison.Ordinal),
+    && !registryScannerSource.Contains("\"ProgID (", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("verbName.Equals(\"Attributes\"", StringComparison.Ordinal)
+    && !registryScannerSource.Contains("verbName.Equals(\"AnyCode\"", StringComparison.Ordinal),
     "RegistryScannerNoInlineLocationLabelLiterals"
 );
 
@@ -331,8 +346,8 @@ AssertTrue(
 );
 
 AssertTrue(
-    benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal)
-    && benchmarkServiceSource.Contains("TryParseStaticVerbKey(key, out string name, out string command)", StringComparison.Ordinal),
+    benchmarkServiceSource.Contains("BenchmarkSemantics.TryParseStaticVerbUniqueKey(key, out string name, out string command)", StringComparison.Ordinal)
+    && !benchmarkServiceSource.Contains("private static bool TryParseStaticVerbKey", StringComparison.Ordinal),
     "BenchmarkServiceUsesStaticVerbKeyParser"
 );
 

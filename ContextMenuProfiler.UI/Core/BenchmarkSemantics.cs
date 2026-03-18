@@ -130,7 +130,17 @@ namespace ContextMenuProfiler.UI.Core
         {
             public const string Disabled = "[Disabled]";
             public const string DisabledSuffix = " [Disabled]";
+            public const char StaticVerbDisabledKeyPrefixChar = '-';
             public const string StaticVerbDisabledKeyPrefix = "-";
+        }
+
+        public static class StaticVerb
+        {
+            public const string CommandSubKeyName = "command";
+            public const string MuiVerbValueName = "MUIVerb";
+            public const string IgnoredVerbAttributes = "Attributes";
+            public const string IgnoredVerbAnyCode = "AnyCode";
+            public const char UniqueKeySeparator = '|';
         }
 
         public static class Runtime
@@ -250,6 +260,43 @@ namespace ContextMenuProfiler.UI.Core
                 : registryPath;
 
             return terminalSegment.StartsWith(RegistryLocationToken.StaticVerbDisabledKeyPrefix, StringComparison.Ordinal);
+        }
+
+        public static bool IsIgnoredStaticVerbName(string? verbName)
+        {
+            if (string.IsNullOrWhiteSpace(verbName))
+            {
+                return false;
+            }
+
+            return string.Equals(verbName, StaticVerb.IgnoredVerbAttributes, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(verbName, StaticVerb.IgnoredVerbAnyCode, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string BuildStaticVerbUniqueKey(string displayName, string command)
+        {
+            return $"{displayName}{StaticVerb.UniqueKeySeparator}{command}";
+        }
+
+        public static bool TryParseStaticVerbUniqueKey(string key, out string name, out string command)
+        {
+            name = string.Empty;
+            command = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            int separatorIndex = key.IndexOf(StaticVerb.UniqueKeySeparator);
+            if (separatorIndex <= 0 || separatorIndex >= key.Length - 1)
+            {
+                return false;
+            }
+
+            name = key[..separatorIndex];
+            command = key[(separatorIndex + 1)..];
+            return true;
         }
 
         public static bool IsCategoryMatch(string? selectedCategory, string? resultCategory)

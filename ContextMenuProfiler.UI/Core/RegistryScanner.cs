@@ -266,8 +266,7 @@ namespace ContextMenuProfiler.UI.Core
                     foreach (var verbName in key.GetSubKeyNames())
                     {
                         // Ignore some system defaults that are usually not interesting or dangerous to touch
-                        if (verbName.Equals("Attributes", StringComparison.OrdinalIgnoreCase) || 
-                            verbName.Equals("AnyCode", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (BenchmarkSemantics.IsIgnoredStaticVerbName(verbName)) continue;
 
                         using (var verbKey = key.OpenSubKey(verbName))
                         {
@@ -275,7 +274,7 @@ namespace ContextMenuProfiler.UI.Core
 
                             // Get Command
                             string command = "";
-                            using (var commandKey = verbKey.OpenSubKey("command"))
+                            using (var commandKey = verbKey.OpenSubKey(BenchmarkSemantics.StaticVerb.CommandSubKeyName))
                             {
                                 command = commandKey?.GetValue("") as string ?? "";
                             }
@@ -285,7 +284,7 @@ namespace ContextMenuProfiler.UI.Core
                             if (string.IsNullOrEmpty(command)) continue;
 
                             // Get Display Name (MUIVerb > Default)
-                            string? displayName = verbKey.GetValue("MUIVerb") as string;
+                            string? displayName = verbKey.GetValue(BenchmarkSemantics.StaticVerb.MuiVerbValueName) as string;
                             if (string.IsNullOrEmpty(displayName))
                             {
                                 displayName = verbKey.GetValue("") as string; // Default value
@@ -299,11 +298,11 @@ namespace ContextMenuProfiler.UI.Core
 
                             if (string.IsNullOrEmpty(displayName))
                             {
-                                displayName = verbName.TrimStart('-'); // Fallback to key name
+                                displayName = verbName.TrimStart(BenchmarkSemantics.RegistryLocationToken.StaticVerbDisabledKeyPrefixChar); // Fallback to key name
                             }
 
                             // Use unique key: "Name|Command" to distinguish same name but different command
-                            string uniqueKey = $"{displayName}|{command}";
+                            string uniqueKey = BenchmarkSemantics.BuildStaticVerbUniqueKey(displayName, command);
                             
                             var list = verbs.GetOrAdd(uniqueKey, _ => new List<string>());
                             lock (list)
